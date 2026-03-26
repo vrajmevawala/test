@@ -1,0 +1,25 @@
+{
+  "name": "codeopt-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "pnpm exec tsx drizzle/seed.ts"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.5",
+    "drizzle-kit": "^0.31.10",
+    "pg": "^8.13.1",
+    "tsx": "^4.21.0",
+    "turbo": "latest",
+    "prettier": "latest"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
