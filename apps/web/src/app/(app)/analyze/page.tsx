@@ -8,6 +8,8 @@ import { api } from '@/lib/api';
 import { StatusBar } from '@/components/layout/status-bar';
 import { Play, Loader2, ChevronDown } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { useSearchParams } from 'next/navigation';
+import { useBotStore } from '@/stores/bot.store';
 import type { AnalysisFile, Issue } from '@/types';
 
 interface Tab {
@@ -23,14 +25,7 @@ interface Tab {
 }
 
 const LANGUAGES = [
-  { id: 'typescript', name: 'TypeScript', ext: 'ts' },
-  { id: 'javascript', name: 'JavaScript', ext: 'js' },
   { id: 'python', name: 'Python', ext: 'py' },
-  { id: 'go', name: 'Go', ext: 'go' },
-  { id: 'rust', name: 'Rust', ext: 'rs' },
-  { id: 'java', name: 'Java', ext: 'java' },
-  { id: 'cpp', name: 'C++', ext: 'cpp' },
-  { id: 'csharp', name: 'C#', ext: 'cs' },
 ];
 
 export default function AnalyzePage() {
@@ -43,6 +38,8 @@ export default function AnalyzePage() {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
+  const searchParams = useSearchParams();
+  const { setOpen: setChatOpen } = useBotStore();
 
   const handleStartRename = (id: string, name: string) => {
     setEditingTabId(id);
@@ -56,43 +53,88 @@ export default function AnalyzePage() {
     setEditingTabId(null);
   };
 
+  const handleAddTab = useCallback(() => {
+    const newId = uuidv4();
+    const newTab: Tab = {
+      id: newId,
+      name: 'Untitled.py',
+      language: 'Python',
+      code: '# Paste your code here to analyze...',
+      isDraft: true,
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newId);
+  }, []);
+
   // Load existing analyses on mount
   useEffect(() => {
     async function init() {
       try {
         await api.ensureWorkspace();
-        const list = await api.trpcQuery<{ items: any[] }>('analysis.list', { page: 1, pageSize: 20 });
+        const targetId = searchParams.get('id');
+        const shouldOpenChat = searchParams.get('chat') === 'true';
+
+        // Limit to 5 most recent
+        const list = await api.trpcQuery<{ items: any[] }>('analysis.list', { page: 1, pageSize: 5 });
         const items = list.items || [];
         
+        const mapToTab = (detail: any): Tab => ({
+          id: detail.id,
+          name: detail.filename,
+          language: detail.language,
+          code: detail.metadata?.sourceCode || '',
+          isDraft: false,
+          score: Math.round(Number(detail.score ?? 0)),
+          status: detail.status,
+          issues: (detail.issues || []).map((i: any) => ({
+            id: i.id,
+            line: i.line,
+            column: i.col,
+            severity: i.severity,
+            message: i.message,
+            rule: i.rule,
+            fixable: i.fixable,
+            explanation: i.suggestion,
+          })),
+          fixedCount: (detail.issues || []).filter((i: any) => i.fixable).length,
+        });
+
         const loadedTabs: Tab[] = await Promise.all(items.map(async (item) => {
           const detail = await api.trpcQuery<any>('analysis.byId', { id: item.id });
-          return {
-            id: detail.id,
-            name: detail.filename,
-            language: detail.language,
-            code: detail.metadata?.sourceCode || '',
-            isDraft: false,
-            score: Math.round(Number(detail.score ?? 0)),
-            status: detail.status,
-            issues: (detail.issues || []).map((i: any) => ({
-              id: i.id,
-              line: i.line,
-              column: i.col,
-              severity: i.severity,
-              message: i.message,
-              rule: i.rule,
-              fixable: i.fixable,
-              explanation: i.suggestion,
-            })),
-            fixedCount: (detail.issues || []).filter((i: any) => i.fixable).length,
-          };
+          return mapToTab(detail);
         }));
 
-        if (loadedTabs.length > 0) {
+        if (targetId) {
+          const exists = loadedTabs.find(t => t.id === targetId);
+          if (exists) {
+            setTabs(loadedTabs);
+            setActiveTabId(targetId);
+          } else {
+            // Fetch the specific one and add it to the front of the 5 recent
+            try {
+              const detail = await api.trpcQuery<any>('analysis.byId', { id: targetId });
+              const tab = mapToTab(detail);
+              setTabs([tab, ...loadedTabs.slice(0, 4)]);
+              setActiveTabId(targetId);
+            } catch (err) {
+              console.error("Failed to load specific analysis", err);
+              if (loadedTabs.length > 0) {
+                setTabs(loadedTabs);
+                setActiveTabId(loadedTabs[0].id);
+              } else {
+                handleAddTab();
+              }
+            }
+          }
+        } else if (loadedTabs.length > 0) {
           setTabs(loadedTabs);
           setActiveTabId(loadedTabs[0].id);
         } else {
           handleAddTab();
+        }
+
+        if (shouldOpenChat) {
+          setChatOpen(true);
         }
       } catch (e) {
         console.error("Failed to load analyses", e);
@@ -100,20 +142,7 @@ export default function AnalyzePage() {
       }
     }
     init();
-  }, []);
-
-  const handleAddTab = () => {
-    const newId = uuidv4();
-    const newTab: Tab = {
-      id: newId,
-      name: 'Untitled.ts',
-      language: 'TypeScript',
-      code: '// Paste your code here to analyze...',
-      isDraft: true,
-    };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(newId);
-  };
+  }, [searchParams, setChatOpen, handleAddTab]);
 
   const handleCloseTab = (id: string) => {
     setTabs(prev => {
@@ -150,7 +179,7 @@ export default function AnalyzePage() {
     try {
       setAnalyzing(true);
       
-      const langId = LANGUAGES.find(l => l.name === activeTab.language)?.id || 'typescript';
+      const langId = 'python';
 
       const { analysisId, uploadUrl } = await api.trpcMutation<{ analysisId: string; uploadUrl: string }>('analysis.create', {
         filename: activeTab.name,
@@ -259,7 +288,7 @@ export default function AnalyzePage() {
         {activeTab?.isDraft && (
           <div style={{ position: 'relative' }}>
             <select
-              value={LANGUAGES.find(l => l.name === activeTab.language)?.id || 'typescript'}
+              value="python"
               onChange={(e) => handleLanguageChange(e.target.value)}
               style={{
                 appearance: 'none',

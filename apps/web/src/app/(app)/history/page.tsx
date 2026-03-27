@@ -4,7 +4,8 @@ import { ScoreRing } from '@/components/ui/score-ring';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Download, MoreHorizontal } from 'lucide-react';
+import { Search, Download, MoreHorizontal, ExternalLink } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
 type AnalysisListItem = {
@@ -56,6 +57,7 @@ export default function HistoryPage() {
   const [rows, setRows] = useState<AnalysisListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const router = useRouter();
 
   useEffect(() => {
     let mounted = true;
@@ -113,7 +115,21 @@ export default function HistoryPage() {
           {!loading && !error && visibleRows.length === 0 && <div style={{ padding: 16, color: 'var(--text-dim)' }}>No analyses found.</div>}
 
           {!loading && !error && visibleRows.map((f, i) => (
-            <div key={f.id} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 60px 80px 70px 120px 90px 80px', padding: '10px 16px', alignItems: 'center', borderBottom: i < visibleRows.length - 1 ? '1px solid var(--border)' : 'none', transition: 'background 0.1s' }}>
+            <div 
+              key={f.id} 
+              onClick={() => router.push(`/analyze?id=${f.id}&chat=true`)}
+              style={{ 
+                display: 'grid', 
+                gridTemplateColumns: '36px 1fr 60px 80px 70px 120px 90px 80px', 
+                padding: '10px 16px', 
+                alignItems: 'center', 
+                borderBottom: i < visibleRows.length - 1 ? '1px solid var(--border)' : 'none', 
+                transition: 'background 0.15s',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
               <div style={{ width: 26, height: 26, borderRadius: 4, background: `${LANG_COLOR[f.language] ?? 'var(--text-mid)'}18`, border: `1px solid ${(LANG_COLOR[f.language] ?? 'var(--text-mid)')}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 700, color: LANG_COLOR[f.language] ?? 'var(--text-mid)' }}>
                 {LANG_ABBR[f.language] || f.language.slice(0, 2).toUpperCase()}
               </div>

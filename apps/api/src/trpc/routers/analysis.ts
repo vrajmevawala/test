@@ -13,7 +13,7 @@ export const analysisRouter = t.router({
     .input(
       z.object({
         filename: z.string().min(1).max(512),
-        language: z.enum(['typescript', 'javascript', 'python', 'go', 'rust', 'java', 'cpp', 'csharp']),
+        language: z.enum(['python']),
         contentSize: z.number().min(1).max(500_000),
         sourceCode: z.string().optional(),
       }),
