@@ -21,6 +21,7 @@ interface BotState {
   updateLastMessage: (content: string) => void;
   setStreaming: (status: boolean) => void;
   toggleOpen: () => void;
+  setOpen: (isOpen: boolean) => void;
   resetConversation: () => void;
 }
 
@@ -45,6 +46,8 @@ export const useBotStore = create<BotState>((set) => ({
   setStreaming: (status) => set({ isStreaming: status }),
   
   toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
+
+  setOpen: (isOpen) => set({ isOpen }),
 
   resetConversation: () => {
     const newId = uuidv4();

@@ -8,6 +8,8 @@ import { api } from '@/lib/api';
 import { StatusBar } from '@/components/layout/status-bar';
 import { Play, Loader2, ChevronDown } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { useSearchParams } from 'next/navigation';
+import { useBotStore } from '@/stores/bot.store';
 import type { AnalysisFile, Issue } from '@/types';
 
 interface Tab {
@@ -36,6 +38,8 @@ export default function AnalyzePage() {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
+  const searchParams = useSearchParams();
+  const { setOpen: setChatOpen } = useBotStore();
 
   const handleStartRename = (id: string, name: string) => {
     setEditingTabId(id);
@@ -49,53 +53,7 @@ export default function AnalyzePage() {
     setEditingTabId(null);
   };
 
-  // Load existing analyses on mount
-  useEffect(() => {
-    async function init() {
-      try {
-        await api.ensureWorkspace();
-        const list = await api.trpcQuery<{ items: any[] }>('analysis.list', { page: 1, pageSize: 20 });
-        const items = list.items || [];
-        
-        const loadedTabs: Tab[] = await Promise.all(items.map(async (item) => {
-          const detail = await api.trpcQuery<any>('analysis.byId', { id: item.id });
-          return {
-            id: detail.id,
-            name: detail.filename,
-            language: detail.language,
-            code: detail.metadata?.sourceCode || '',
-            isDraft: false,
-            score: Math.round(Number(detail.score ?? 0)),
-            status: detail.status,
-            issues: (detail.issues || []).map((i: any) => ({
-              id: i.id,
-              line: i.line,
-              column: i.col,
-              severity: i.severity,
-              message: i.message,
-              rule: i.rule,
-              fixable: i.fixable,
-              explanation: i.suggestion,
-            })),
-            fixedCount: (detail.issues || []).filter((i: any) => i.fixable).length,
-          };
-        }));
-
-        if (loadedTabs.length > 0) {
-          setTabs(loadedTabs);
-          setActiveTabId(loadedTabs[0].id);
-        } else {
-          handleAddTab();
-        }
-      } catch (e) {
-        console.error("Failed to load analyses", e);
-        handleAddTab();
-      }
-    }
-    init();
-  }, []);
-
-  const handleAddTab = () => {
+  const handleAddTab = useCallback(() => {
     const newId = uuidv4();
     const newTab: Tab = {
       id: newId,
@@ -106,7 +64,85 @@ export default function AnalyzePage() {
     };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newId);
-  };
+  }, []);
+
+  // Load existing analyses on mount
+  useEffect(() => {
+    async function init() {
+      try {
+        await api.ensureWorkspace();
+        const targetId = searchParams.get('id');
+        const shouldOpenChat = searchParams.get('chat') === 'true';
+
+        // Limit to 5 most recent
+        const list = await api.trpcQuery<{ items: any[] }>('analysis.list', { page: 1, pageSize: 5 });
+        const items = list.items || [];
+        
+        const mapToTab = (detail: any): Tab => ({
+          id: detail.id,
+          name: detail.filename,
+          language: detail.language,
+          code: detail.metadata?.sourceCode || '',
+          isDraft: false,
+          score: Math.round(Number(detail.score ?? 0)),
+          status: detail.status,
+          issues: (detail.issues || []).map((i: any) => ({
+            id: i.id,
+            line: i.line,
+            column: i.col,
+            severity: i.severity,
+            message: i.message,
+            rule: i.rule,
+            fixable: i.fixable,
+            explanation: i.suggestion,
+          })),
+          fixedCount: (detail.issues || []).filter((i: any) => i.fixable).length,
+        });
+
+        const loadedTabs: Tab[] = await Promise.all(items.map(async (item) => {
+          const detail = await api.trpcQuery<any>('analysis.byId', { id: item.id });
+          return mapToTab(detail);
+        }));
+
+        if (targetId) {
+          const exists = loadedTabs.find(t => t.id === targetId);
+          if (exists) {
+            setTabs(loadedTabs);
+            setActiveTabId(targetId);
+          } else {
+            // Fetch the specific one and add it to the front of the 5 recent
+            try {
+              const detail = await api.trpcQuery<any>('analysis.byId', { id: targetId });
+              const tab = mapToTab(detail);
+              setTabs([tab, ...loadedTabs.slice(0, 4)]);
+              setActiveTabId(targetId);
+            } catch (err) {
+              console.error("Failed to load specific analysis", err);
+              if (loadedTabs.length > 0) {
+                setTabs(loadedTabs);
+                setActiveTabId(loadedTabs[0].id);
+              } else {
+                handleAddTab();
+              }
+            }
+          }
+        } else if (loadedTabs.length > 0) {
+          setTabs(loadedTabs);
+          setActiveTabId(loadedTabs[0].id);
+        } else {
+          handleAddTab();
+        }
+
+        if (shouldOpenChat) {
+          setChatOpen(true);
+        }
+      } catch (e) {
+        console.error("Failed to load analyses", e);
+        handleAddTab();
+      }
+    }
+    init();
+  }, [searchParams, setChatOpen, handleAddTab]);
 
   const handleCloseTab = (id: string) => {
     setTabs(prev => {
