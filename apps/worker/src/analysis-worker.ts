@@ -7,8 +7,10 @@ import { Redis } from 'ioredis';
 import { 
   ANALYSIS_SYSTEM_PROMPT, 
   buildAnalysisUserPrompt, 
-  buildFixPrompt 
+  buildFixPrompt,
+  buildASTContext
 } from './prompts.js';
+import { getTreeSitterAnalysis, snapToNode } from './utils/tree-sitter-analyzer.js';
 
 const redisUrl = process.env.UPSTASH_REDIS_URL;
 if (!redisUrl) {
@@ -84,11 +86,15 @@ export const analysisWorker = new Worker(
         throw new Error('No source code available for analysis');
       }
 
+      // PRE-ANALYSIS: Run Structural Tree-sitter Pass
+      const astMetrics = analysis.language === 'python' ? getTreeSitterAnalysis(code, 'python') : null;
+      const astContext = astMetrics ? buildASTContext(astMetrics) : undefined;
+      
       const response = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
-          { role: 'user', content: buildAnalysisUserPrompt(analysis.language, code) }
+          { role: 'user', content: buildAnalysisUserPrompt(analysis.language, code, astContext) }
         ],
         tools: [REPORT_ISSUE_TOOL],
         tool_choice: 'auto',
@@ -112,18 +118,24 @@ export const analysisWorker = new Worker(
         insertedIssueRows = await db
           .insert(issues)
           .values(
-            reportedIssues.map((issue) => ({
-              analysisId,
-              line: issue.line,
-              col: issue.col ?? 0,
-              severity: issue.severity,
-              category: issue.category,
-              rule: issue.rule,
-              message: issue.message,
-              suggestion: issue.suggestion,
-              codeSnippet: issue.codeSnippet || code.split('\n')[issue.line - 1] || '',
-              fixable: issue.fixable ?? false,
-            })),
+            reportedIssues.map((issue) => {
+              // Coordinate Snapping Pass
+              const snapped = snapToNode(code, issue.line, issue.col ?? 0);
+              
+              return {
+                analysisId,
+                line: snapped?.line ?? issue.line,
+                col: snapped?.col ?? issue.col ?? 0,
+                endLine: snapped?.endLine ?? snapped?.line ?? issue.line,
+                severity: issue.severity,
+                category: issue.category,
+                rule: issue.rule,
+                message: issue.message,
+                suggestion: issue.suggestion,
+                codeSnippet: issue.codeSnippet || code.split('\n')[(snapped?.line ?? issue.line) - 1] || '',
+                fixable: issue.fixable ?? false,
+              };
+            }),
           )
           .returning({ id: issues.id, message: issues.message });
 
@@ -162,6 +174,8 @@ export const analysisWorker = new Worker(
         .set({
           status: 'complete',
           score,
+          cyclomaticComplexity: astMetrics?.cyclomaticComplexity || null,
+          cognitiveComplexity: astMetrics?.cognitiveComplexity || null,
           tokensUsed: response.usage?.total_tokens || 0,
           completedAt: new Date(),
           updatedAt: new Date(),
