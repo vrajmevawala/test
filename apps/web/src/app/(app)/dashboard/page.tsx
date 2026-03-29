@@ -32,6 +32,7 @@ type ActivityRow = {
   resourceId: string | null;
   createdAt: string;
   actorName: string | null;
+  filename?: string | null;
 };
 
 type QualityScore = {
@@ -129,8 +130,8 @@ export default function DashboardPage() {
       activity.map((row) => ({
         id: row.id,
         user: row.actorName ?? 'Unknown User',
-        action: row.action,
-        target: row.resourceType ?? 'resource',
+        action: row.action.replace('analysis.', '').replace('team.', '').replace('_', ' '),
+        target: row.filename || row.resourceType || 'resource',
         time: toRelativeTime(row.createdAt),
         color: 'var(--accent)',
       })),

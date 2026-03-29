@@ -4,7 +4,6 @@ import { TRPCError } from '@trpc/server';
 import { analyses, fixes, issues } from '@codeopt/db/schema';
 import { t } from '../init.js';
 import { developerProcedure } from '../middleware.js';
-import { getR2Object } from '../../lib/r2.js';
 import { insertAuditLog } from '../../lib/audit.js';
 
 export const fixRouter = t.router({
@@ -28,12 +27,7 @@ export const fixRouter = t.router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'No fix generated yet.' });
       }
 
-      let diffContent: string | null = null;
-      if (fix.diffStorageKey) {
-        diffContent = await getR2Object(fix.diffStorageKey);
-      }
-
-      return { ...fix, diffContent };
+      return { ...fix };
     }),
 
   apply: developerProcedure

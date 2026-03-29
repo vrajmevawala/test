@@ -131,6 +131,37 @@ export const teamRouter = t.router({
       return updated;
     }),
 
+  join: workspaceProcedure
+    .input(z.object({ workspaceId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      // Check if already a member
+      const [existing] = await ctx.db
+        .select({ id: teamMembers.id })
+        .from(teamMembers)
+        .where(and(eq(teamMembers.workspaceId, input.workspaceId), eq(teamMembers.userId, ctx.user!.id)))
+        .limit(1);
+
+      if (existing) {
+        return { joined: true, alreadyMember: true };
+      }
+
+      await ctx.db.insert(teamMembers).values({
+        workspaceId: input.workspaceId,
+        userId: ctx.user!.id,
+        role: 'developer',
+        status: 'active',
+        joinedAt: new Date(),
+      });
+
+      await insertAuditLog(ctx, {
+        action: 'team.member_joined',
+        resourceType: 'workspace',
+        resourceId: input.workspaceId,
+      });
+
+      return { joined: true };
+    }),
+
   removeMember: adminProcedure
     .input(z.object({ memberId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {

@@ -4,7 +4,6 @@ import { TRPCError } from '@trpc/server';
 import { analyses, issues, users } from '@codeopt/db/schema';
 import { t } from '../init.js';
 import { adminProcedure, developerProcedure, workspaceProcedure } from '../middleware.js';
-import { generatePresignedUploadUrl } from '../../lib/r2.js';
 import { enqueueAnalysis } from '../../jobs/analysis-queue.js';
 import { insertAuditLog } from '../../lib/audit.js';
 
@@ -13,9 +12,10 @@ export const analysisRouter = t.router({
     .input(
       z.object({
         filename: z.string().min(1).max(512),
-        language: z.enum(['python']),
+        language: z.enum(['python', 'cpp', 'plaintext']),
         contentSize: z.number().min(1).max(500_000),
-        sourceCode: z.string().optional(),
+        sourceCode: z.string().min(1),
+        id: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -29,46 +29,47 @@ export const analysisRouter = t.router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found.' });
       }
 
-      if (userRow.creditsLimit !== -1 && userRow.creditsUsed >= userRow.creditsLimit) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Credit limit reached. Upgrade your plan to continue.',
-        });
+      const creditsRequired = Math.max(4, Math.ceil(input.contentSize / 10_000));
+      
+      let analysisId = input.id;
+
+      if (analysisId) {
+        // Update existing analysis
+        await ctx.db
+          .update(analyses)
+          .set({
+            filename: input.filename,
+            language: input.language,
+            status: 'pending',
+            creditsCharged: creditsRequired,
+            metadata: { sourceCode: input.sourceCode },
+            updatedAt: new Date(),
+          })
+          .where(and(eq(analyses.id, analysisId), eq(analyses.createdById, ctx.user!.id)));
+      } else {
+        // Create new analysis
+        const [newAnalysis] = await ctx.db
+          .insert(analyses)
+          .values({
+            workspaceId: ctx.workspaceId!,
+            createdById: ctx.user!.id,
+            filename: input.filename,
+            language: input.language,
+            status: 'pending',
+            creditsCharged: creditsRequired,
+            metadata: { sourceCode: input.sourceCode },
+          })
+          .returning({ id: analyses.id });
+        analysisId = newAnalysis.id;
       }
 
-      const creditsRequired = Math.max(4, Math.ceil(input.contentSize / 10_000));
-
-      const [analysis] = await ctx.db
-        .insert(analyses)
-        .values({
-          workspaceId: ctx.workspaceId!,
-          createdById: ctx.user!.id,
-          filename: input.filename,
-          language: input.language,
-          status: 'pending',
-          creditsCharged: creditsRequired,
-          metadata: { sourceCode: input.sourceCode },
-        })
-        .returning({ id: analyses.id });
-
-      const { uploadUrl, storageKey } = await generatePresignedUploadUrl({
-        bucket: process.env.R2_BUCKET ?? '',
-        key: `code/${ctx.workspaceId!}/${analysis.id}/source`,
-        ttl: 300,
-      });
-
-      await ctx.db
-        .update(analyses)
-        .set({ codeStorageKey: storageKey, updatedAt: new Date() })
-        .where(eq(analyses.id, analysis.id));
-
       await insertAuditLog(ctx, {
-        action: 'analysis.created',
+        action: input.id ? 'analysis.updated' : 'analysis.created',
         resourceType: 'analysis',
-        resourceId: analysis.id,
+        resourceId: analysisId,
       });
 
-      return { analysisId: analysis.id, uploadUrl, creditsRequired };
+      return { analysisId: analysisId!, creditsRequired };
     }),
 
   start: developerProcedure
@@ -188,7 +189,16 @@ export const analysisRouter = t.router({
       }
 
       const analysisIssues = await ctx.db
-        .select()
+        .select({
+          id: issues.id,
+          line: issues.line,
+          column: issues.col,
+          severity: issues.severity,
+          message: issues.message,
+          rule: issues.rule,
+          fixable: issues.fixable,
+          fix: sql<string>`(SELECT fixed_code FROM fixes WHERE issue_id = issues.id LIMIT 1)`,
+        })
         .from(issues)
         .where(eq(issues.analysisId, analysis.id))
         .orderBy(issues.severity, issues.line);

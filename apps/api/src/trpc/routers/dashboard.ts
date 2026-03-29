@@ -104,9 +104,11 @@ export const dashboardRouter = t.router({
           createdAt: auditLogs.createdAt,
           actorName: users.name,
           actorAvatar: users.avatarUrl,
+          filename: analyses.filename,
         })
         .from(auditLogs)
         .leftJoin(users, eq(auditLogs.actorId, users.id))
+        .leftJoin(analyses, eq(auditLogs.resourceId, analyses.id))
         .where(eq(auditLogs.workspaceId, ctx.workspaceId!))
         .orderBy(desc(auditLogs.createdAt))
         .limit(input.limit);

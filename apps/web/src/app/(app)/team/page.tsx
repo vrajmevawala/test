@@ -43,6 +43,8 @@ export default function TeamPage() {
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [plan, setPlan] = useState<BillingResponse['credits'] | null>(null);
   const [workspaceId, setWorkspaceId] = useState<string>('');
+  const [isCopying, setIsCopying] = useState(false);
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -78,6 +80,43 @@ export default function TeamPage() {
     };
   }, []);
 
+  const handleInvite = async () => {
+    const email = window.prompt("Enter teammate's email:");
+    if (!email || inviting) return;
+    try {
+      setInviting(true);
+      await api.trpcMutation('team.invite', { email, role: 'developer' });
+      // Refresh
+      const memberRows = await api.trpcQuery<MemberRow[]>('team.members', {});
+      setMembers(memberRows ?? []);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to invite member");
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    const url = `${window.location.origin}/invite/${workspaceId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setIsCopying(true);
+      setTimeout(() => setIsCopying(false), 2000);
+    } catch (err) {
+      console.error("Paste failed", err);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to remove ${name} from the team?`)) return;
+    try {
+      await api.trpcMutation('team.removeMember', { memberId });
+      setMembers(prev => prev.filter(m => m.memberId !== memberId));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to remove member");
+    }
+  };
+
   const activeMembers = useMemo(() => members.filter((m) => m.status === 'active'), [members]);
   const creditsLimit = plan?.creditsLimit ?? 0;
   const creditsUsed = plan?.creditsUsed ?? 0;
@@ -99,7 +138,15 @@ export default function TeamPage() {
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Team Members</h2>
             <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{members.length} members · {(plan?.plan ?? 'free').toUpperCase()} plan</p>
           </div>
-          <Button variant="primary" size="sm" icon={<UserPlus size={13} />}>Invite Member</Button>
+          <Button 
+            variant="primary" 
+            size="sm" 
+            icon={<UserPlus size={13} />}
+            onClick={handleInvite}
+            disabled={inviting}
+          >
+            {inviting ? "Inviting..." : "Invite Member"}
+          </Button>
         </div>
 
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
@@ -127,7 +174,12 @@ export default function TeamPage() {
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: m.status === 'invited' ? 'var(--text-dim)' : 'var(--text)' }}>{m.status === 'invited' ? '—' : Number(m.analysesCount)}</div>
                 <div>{m.status === 'invited' ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-dim)' }}>—</span> : <ScoreRing score={Math.round(Number(m.avgScore ?? 0))} size={32} strokeWidth={3} />}</div>
                 <Badge variant={m.status === 'active' ? 'green' : m.status === 'invited' ? 'yellow' : 'red'}>{m.status}</Badge>
-                <Button variant="ghost" size="sm" icon={<MoreHorizontal size={14} />} />
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  icon={<MoreHorizontal size={14} />} 
+                  onClick={() => handleRemoveMember(m.memberId, displayName)}
+                />
               </div>
             );
           })}
@@ -167,7 +219,15 @@ export default function TeamPage() {
           <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mid)', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {`${window.location.origin}/invite/${workspaceId}`}
           </div>
-          <Button variant="secondary" size="sm" icon={<LinkIcon size={12} />} style={{ width: '100%' }}>Copy Link</Button>
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            icon={isCopying ? null : <LinkIcon size={12} />} 
+            style={{ width: '100%' }}
+            onClick={handleCopyLink}
+          >
+            {isCopying ? "Link Copied!" : "Copy Link"}
+          </Button>
         </div>
       </div>
     </div>

@@ -13,6 +13,8 @@ export interface AnalysisFile {
   date: string;
   issues: Issue[];
   code: string;
+  cyclomaticComplexity?: number;
+  cognitiveComplexity?: number;
 }
 
 export interface Metric {

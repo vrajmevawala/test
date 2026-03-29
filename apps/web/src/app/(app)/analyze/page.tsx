@@ -22,10 +22,14 @@ interface Tab {
   issues?: Issue[];
   fixedCount?: number;
   status?: string;
+  cyclomaticComplexity?: number;
+  cognitiveComplexity?: number;
 }
 
 const LANGUAGES = [
   { id: 'python', name: 'Python', ext: 'py' },
+  { id: 'cpp', name: 'C++', ext: 'cpp' },
+  { id: 'plaintext', name: 'Plain Text', ext: 'txt' },
 ];
 
 export default function AnalyzePage() {
@@ -48,7 +52,17 @@ export default function AnalyzePage() {
 
   const handleFinishRename = () => {
     if (editingTabId && editingName.trim()) {
-      setTabs(prev => prev.map(t => t.id === editingTabId ? { ...t, name: editingName.trim() } : t));
+      const name = editingName.trim();
+      const ext = name.split('.').pop()?.toLowerCase();
+      const langId = LANGUAGES.find(l => l.ext === ext)?.id || 'plaintext';
+      const langName = LANGUAGES.find(l => l.ext === ext)?.name || 'Plain Text';
+      
+      setTabs(prev => prev.map(t => t.id === editingTabId ? { 
+        ...t, 
+        name, 
+        language: langName, 
+        internalLanguage: langId 
+      } as any : t));
     }
     setEditingTabId(null);
   };
@@ -57,9 +71,9 @@ export default function AnalyzePage() {
     const newId = uuidv4();
     const newTab: Tab = {
       id: newId,
-      name: 'Untitled.py',
-      language: 'Python',
-      code: '# Paste your code here to analyze...',
+      name: 'Untitled',
+      language: 'Plain Text',
+      code: '',
       isDraft: true,
     };
     setTabs(prev => [...prev, newTab]);
@@ -74,18 +88,19 @@ export default function AnalyzePage() {
         const targetId = searchParams.get('id');
         const shouldOpenChat = searchParams.get('chat') === 'true';
 
-        // Limit to 5 most recent
-        const list = await api.trpcQuery<{ items: any[] }>('analysis.list', { page: 1, pageSize: 5 });
+        const list = await api.trpcQuery<{ items: any[] }>('analysis.list', { page: 1, pageSize: 10 });
         const items = list.items || [];
         
         const mapToTab = (detail: any): Tab => ({
           id: detail.id,
           name: detail.filename,
-          language: detail.language,
+          language: detail.language === 'cpp' ? 'C++' : detail.language === 'python' ? 'Python' : 'Plain Text',
           code: detail.metadata?.sourceCode || '',
           isDraft: false,
           score: Math.round(Number(detail.score ?? 0)),
           status: detail.status,
+          cyclomaticComplexity: detail.cyclomaticComplexity,
+          cognitiveComplexity: detail.cognitiveComplexity,
           issues: (detail.issues || []).map((i: any) => ({
             id: i.id,
             line: i.line,
@@ -94,7 +109,7 @@ export default function AnalyzePage() {
             message: i.message,
             rule: i.rule,
             fixable: i.fixable,
-            explanation: i.suggestion,
+            fix: i.fix,
           })),
           fixedCount: (detail.issues || []).filter((i: any) => i.fixable).length,
         });
@@ -110,35 +125,21 @@ export default function AnalyzePage() {
             setTabs(loadedTabs);
             setActiveTabId(targetId);
           } else {
-            // Fetch the specific one and add it to the front of the 5 recent
-            try {
-              const detail = await api.trpcQuery<any>('analysis.byId', { id: targetId });
-              const tab = mapToTab(detail);
-              setTabs([tab, ...loadedTabs.slice(0, 4)]);
-              setActiveTabId(targetId);
-            } catch (err) {
-              console.error("Failed to load specific analysis", err);
-              if (loadedTabs.length > 0) {
-                setTabs(loadedTabs);
-                setActiveTabId(loadedTabs[0].id);
-              } else {
-                handleAddTab();
-              }
-            }
+            const detail = await api.trpcQuery<any>('analysis.byId', { id: targetId });
+            const tab = mapToTab(detail);
+            setTabs([tab, ...loadedTabs]);
+            setActiveTabId(targetId);
           }
         } else if (loadedTabs.length > 0) {
           setTabs(loadedTabs);
           setActiveTabId(loadedTabs[0].id);
         } else {
-          handleAddTab();
+            handleAddTab();
         }
 
-        if (shouldOpenChat) {
-          setChatOpen(true);
-        }
+        if (shouldOpenChat) setChatOpen(true);
       } catch (e) {
         console.error("Failed to load analyses", e);
-        handleAddTab();
       }
     }
     init();
@@ -147,9 +148,7 @@ export default function AnalyzePage() {
   const handleCloseTab = (id: string) => {
     setTabs(prev => {
       const filtered = prev.filter(t => t.id !== id);
-      if (activeTabId === id && filtered.length > 0) {
-        setActiveTabId(filtered[filtered.length - 1].id);
-      }
+      if (activeTabId === id && filtered.length > 0) setActiveTabId(filtered[0].id);
       return filtered;
     });
   };
@@ -161,13 +160,7 @@ export default function AnalyzePage() {
   const handleLanguageChange = (langId: string) => {
     const lang = LANGUAGES.find(l => l.id === langId);
     if (!lang) return;
-    setTabs(prev => prev.map(t => {
-      if (t.id === activeTabId && t.isDraft) {
-        const baseName = t.name.split('.')[0];
-        return { ...t, language: lang.name, name: `${baseName}.${lang.ext}` };
-      }
-      return t;
-    }));
+    setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, language: lang.name } : t));
   };
 
   const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId), [tabs, activeTabId]);
@@ -178,43 +171,38 @@ export default function AnalyzePage() {
 
     try {
       setAnalyzing(true);
-      
-      const langId = 'python';
+      const ext = activeTab.name.split('.').pop()?.toLowerCase();
+      const langId = LANGUAGES.find(l => l.ext === ext)?.id || 'plaintext';
 
-      const { analysisId, uploadUrl } = await api.trpcMutation<{ analysisId: string; uploadUrl: string }>('analysis.create', {
+      const { analysisId } = await api.trpcMutation<{ analysisId: string }>('analysis.create', {
         filename: activeTab.name,
         language: langId as any,
         contentSize: activeTab.code.length,
         sourceCode: activeTab.code,
+        id: activeTab.isDraft ? undefined : activeTab.id,
       });
 
-      try {
-        await fetch(uploadUrl, {
-          method: 'PUT',
-          body: activeTab.code,
-          headers: { 'Content-Type': 'text/plain' },
-        });
-      } catch (err) {
-        console.warn('R2 upload failed, proceeding with metadata-based analysis:', err);
-      }
-
       await api.trpcMutation('analysis.start', { analysisId });
-      setTabs(prev => prev.map(t => (t.id === activeTabId || t.id === analysisId) ? { ...t, status: 'processing', isDraft: false } : t));
+      
+      // Update tab status to processing in-place
+      setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, status: 'processing', isDraft: false } : t));
 
       let result;
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 2000));
         result = await api.trpcQuery<any>('analysis.byId', { id: analysisId });
         if (result.status === 'complete' || result.status === 'failed') break;
       }
 
       if (result) {
-        const updatedTab: Tab = {
-          ...activeTab,
+        setTabs(prev => prev.map(t => t.id === activeTabId ? {
+          ...t,
           id: result.id,
           isDraft: false,
           score: Math.round(Number(result.score ?? 0)),
           status: result.status,
+          cyclomaticComplexity: result.cyclomaticComplexity,
+          cognitiveComplexity: result.cognitiveComplexity,
           issues: (result.issues || []).map((i: any) => ({
             id: i.id,
             line: i.line,
@@ -223,16 +211,12 @@ export default function AnalyzePage() {
             message: i.message,
             rule: i.rule,
             fixable: i.fixable,
-            explanation: i.suggestion,
+            fix: i.fix,
           })),
           fixedCount: (result.issues || []).filter((i: any) => i.fixable).length,
-        };
-        setTabs(prev => prev.map(t => t.id === activeTabId || t.id === analysisId ? updatedTab : t));
-        if (activeTabId === activeTab.id) {
-          setActiveTabId(result.id);
-        }
+        } : t));
+        setActiveTabId(result.id);
       }
-
     } catch (e) {
       console.error("Analysis failed:", e);
     } finally {
@@ -240,15 +224,29 @@ export default function AnalyzePage() {
     }
   };
 
-  // Resize logic
+  const handleApplyFix = (issueId: string) => {
+    if (!activeTab) return;
+    const issue = activeTab.issues?.find(i => i.id === issueId);
+    if (!issue || !issue.fix) return;
+
+    const lines = activeTab.code.split('\n');
+    // Simple line-based replacement.
+    // In a more advanced version, we could use the 'col' and 'endLine/endCol'
+    if (issue.line > 0 && issue.line <= lines.length) {
+      lines[issue.line - 1] = issue.fix;
+      const updatedCode = lines.join('\n');
+      handleCodeChange(updatedCode);
+      // Optional: clear the issue after applying? 
+      // For now, let's keep it but maybe mark it as applied if we added a field.
+    }
+  };
+
   const startResizing = useCallback(() => setIsResizing(true), []);
   const stopResizing = useCallback(() => setIsResizing(false), []);
   const resize = useCallback((e: MouseEvent) => {
     if (isResizing) {
       const newWidth = window.innerWidth - e.clientX;
-      if (newWidth > 200 && newWidth < 800) {
-        setSidebarWidth(newWidth);
-      }
+      if (newWidth > 200 && newWidth < 800) setSidebarWidth(newWidth);
     }
   }, [isResizing]);
 
@@ -263,17 +261,7 @@ export default function AnalyzePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Integrated Editor Toolbar */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        height: 36, 
-        background: 'var(--surface)', 
-        borderBottom: '1px solid var(--border)',
-        paddingRight: 12,
-        gap: 12,
-        flexShrink: 0,
-      }}>
+      <div style={{ display: 'flex', alignItems: 'center', height: 36, background: 'var(--surface)', borderBottom: '1px solid var(--border)', paddingRight: 12, gap: 12, flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
           <EditorTabs
             tabs={tabs.map(t => ({ id: t.id, name: t.name, language: t.language }))}
@@ -281,67 +269,33 @@ export default function AnalyzePage() {
             onSelect={setActiveTabId}
             onClose={handleCloseTab}
             onAdd={handleAddTab}
-            onRename={(id, name) => setTabs(prev => prev.map(t => t.id === id ? { ...t, name } : t))}
+            onRename={(id, name) => {
+                setEditingTabId(id);
+                setEditingName(name);
+                handleFinishRename();
+            }}
           />
         </div>
-
-        {activeTab?.isDraft && (
-          <div style={{ position: 'relative' }}>
-            <select
-              value="python"
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              style={{
-                appearance: 'none',
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                padding: '0 28px 0 10px',
-                height: 24,
-                fontSize: 11,
-                color: 'var(--text-mid)',
-                fontFamily: 'var(--font-mono)',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              {LANGUAGES.map(lang => (
-                <option key={lang.id} value={lang.id}>{lang.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={10} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-          </div>
-        )}
 
         <Button
           variant="primary"
           size="sm"
           onClick={handleAnalyze}
           disabled={analyzing || !activeTab?.code}
-          style={{ 
-            background: 'var(--accent)', 
-            color: '#000', 
-            fontWeight: 600, 
-            paddingLeft: 12, 
-            paddingRight: 12,
-            borderRadius: 4,
-            height: 24,
-            fontSize: 11,
-            flexShrink: 0,
-          }}
+          style={{ background: 'var(--accent)', color: '#000', fontWeight: 600, paddingLeft: 12, paddingRight: 12, borderRadius: 4, height: 24, fontSize: 11, flexShrink: 0 }}
         >
-          {analyzing ? <Loader2 size={12} className="animate-spin" /> : <Play size={10} fill="currentColor" />}
+          {analyzing ? <Loader2 size={12} className="animate-spin-smooth" /> : <Play size={10} fill="currentColor" />}
           <span style={{ marginLeft: 6 }}>Analyze</span>
         </Button>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Main Editor Area */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
           {activeTab ? (
             <CodeEditor
               code={activeTab.code}
-              language={activeTab.language}
-              readOnly={!activeTab.isDraft && activeTab.status === 'complete'}
+              language={activeTab.language.toLowerCase() === 'c++' ? 'cpp' : activeTab.language.toLowerCase()}
+              readOnly={!activeTab.isDraft && activeTab.status === 'processing'}
               onChange={handleCodeChange}
               onCursorChange={(line, col) => setCursorPos({ line, col })}
               issues={activeTab.issues}
@@ -352,34 +306,18 @@ export default function AnalyzePage() {
               }}
             />
           ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
-              Select or create a tab to start
-            </div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>Select or create a tab to start</div>
           )}
         </div>
 
-        {/* Resizer */}
-        <div
-          onMouseDown={startResizing}
-          style={{
-            width: 4,
-            cursor: 'col-resize',
-            background: isResizing ? 'var(--accent)' : 'transparent',
-            transition: 'background 0.2s',
-            zIndex: 10,
-          }}
-          onMouseEnter={e => !isResizing && (e.currentTarget.style.background = 'var(--border)')}
-          onMouseLeave={e => !isResizing && (e.currentTarget.style.background = 'transparent')}
-        />
+        <div onMouseDown={startResizing} style={{ width: 4, cursor: 'col-resize', background: isResizing ? 'var(--accent)' : 'transparent', zIndex: 10 }} />
 
-        {/* Results Sidebar */}
         <div style={{ width: sidebarWidth, flexShrink: 0, background: 'var(--surface)', borderLeft: '1px solid var(--border)', overflow: 'hidden' }}>
           {activeTab && !activeTab.isDraft ? (
             activeTab.status === 'processing' ? (
               <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                <Loader2 size={24} className="animate-spin" style={{ color: 'var(--accent)' }} />
+                <Loader2 size={24} className="animate-spin-smooth" style={{ color: 'var(--accent)' }} />
                 <span>Analyzing {activeTab.name}...</span>
-                <span style={{ fontSize: 11, opacity: 0.6 }}>This usually takes 10-30 seconds</span>
               </div>
             ) : (
               <AnalysisPanel
@@ -394,20 +332,20 @@ export default function AnalyzePage() {
                   status: activeTab.status === 'complete' ? 'completed' : 'running',
                   issues: activeTab.issues || [],
                   date: '',
+                  cyclomaticComplexity: activeTab.cyclomaticComplexity,
+                  cognitiveComplexity: activeTab.cognitiveComplexity,
                 }}
                 activeIssueId={activeIssueId}
-                onIssueClick={setActiveIssueId}
+                onIssueClick={(id) => setActiveIssueId(activeIssueId === id ? undefined : id)}
+                onApplyFix={handleApplyFix}
               />
             )
           ) : (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13 }}>
-              {activeTab?.isDraft ? 'Click "Analyze" to see results' : 'No analysis selected'}
-            </div>
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13 }}>{activeTab?.isDraft ? 'Click "Analyze" to see results' : 'No analysis selected'}</div>
           )}
         </div>
       </div>
 
-      {/* Dynamic Status Bar */}
       <StatusBar 
         file={activeTab?.name || 'No file selected'} 
         language={activeTab?.language || 'Plain Text'} 

@@ -111,6 +111,7 @@ code, pre { font-family: var(--font-mono); }
 
 .animate-fadeinup { animation: fadeInUp 0.25s ease both; }
 .cursor-blink { animation: blink 1s step-end infinite; }
+.animate-spin-smooth { animation: spin 1s linear infinite; will-change: transform; }
 
 /* ─── Layout ─── */
 .app-shell {

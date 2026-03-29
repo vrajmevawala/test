@@ -72,22 +72,22 @@ export const analysisWorker = new Worker(
 
     try {
       const [analysis] = await db.select().from(analyses).where(eq(analyses.id, analysisId)).limit(1);
-      if (!analysis?.codeStorageKey) {
-        throw new Error('Analysis or codeStorageKey missing');
-      }
-
-      // In a real app, you would download the code from S3/R2 here.
-      // For now, we assume it's passed or stored in metadata during creation.
       const code = (analysis.metadata as Record<string, unknown> | null)?.sourceCode as string | undefined;
       
       if (!code) {
-        // Fallback: try to get it from where the frontend uploaded it if we had proper R2 access here.
-        // For this demo, let's assume sourceCode was added to metadata in analysis.create (which I should fix in the router).
         throw new Error('No source code available for analysis');
       }
 
+      // CLEAR OLD RESULTS (For In-place updates)
+      await db.delete(issues).where(eq(issues.analysisId, analysisId));
+      // Fixes are cascading deleted by DB or handled by the app-level logic here.
+      // Since fixes refer to issueId, deleting issues will clear them if cascade is set, 
+      // but let's be explicit if needed. The DB schema should handle this.
+
       // PRE-ANALYSIS: Run Structural Tree-sitter Pass
-      const astMetrics = analysis.language === 'python' ? getTreeSitterAnalysis(code, 'python') : null;
+      const astMetrics = ['python', 'cpp', 'c++'].includes(analysis.language.toLowerCase()) 
+        ? await getTreeSitterAnalysis(code, analysis.language) 
+        : null;
       const astContext = astMetrics ? buildASTContext(astMetrics) : undefined;
       
       const response = await groq.chat.completions.create({
@@ -115,28 +115,28 @@ export const analysisWorker = new Worker(
 
       let insertedIssueRows: Array<{ id: string; message: string }> = [];
       if (reportedIssues.length > 0) {
+        const issueValues = await Promise.all(reportedIssues.map(async (issue) => {
+          // Coordinate Snapping Pass (Optional)
+          const snapped = await snapToNode(code, issue.line, issue.col ?? 0);
+          
+          return {
+            analysisId,
+            line: snapped?.line ?? issue.line,
+            col: snapped?.col ?? issue.col ?? 0,
+            endLine: snapped?.endLine ?? snapped?.line ?? issue.line,
+            severity: issue.severity,
+            category: issue.category,
+            rule: issue.rule,
+            message: issue.message,
+            suggestion: issue.suggestion,
+            codeSnippet: issue.codeSnippet || code.split('\n')[(snapped?.line ?? issue.line) - 1] || '',
+            fixable: issue.fixable ?? false,
+          };
+        }));
+
         insertedIssueRows = await db
           .insert(issues)
-          .values(
-            reportedIssues.map((issue) => {
-              // Coordinate Snapping Pass
-              const snapped = snapToNode(code, issue.line, issue.col ?? 0);
-              
-              return {
-                analysisId,
-                line: snapped?.line ?? issue.line,
-                col: snapped?.col ?? issue.col ?? 0,
-                endLine: snapped?.endLine ?? snapped?.line ?? issue.line,
-                severity: issue.severity,
-                category: issue.category,
-                rule: issue.rule,
-                message: issue.message,
-                suggestion: issue.suggestion,
-                codeSnippet: issue.codeSnippet || code.split('\n')[(snapped?.line ?? issue.line) - 1] || '',
-                fixable: issue.fixable ?? false,
-              };
-            }),
-          )
+          .values(issueValues)
           .returning({ id: issues.id, message: issues.message });
 
         const fixable = reportedIssues.filter((i) => i.fixable);

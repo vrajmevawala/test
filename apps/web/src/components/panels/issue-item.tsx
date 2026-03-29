@@ -9,9 +9,10 @@ interface IssueItemProps {
   issue: Issue;
   active?: boolean;
   onClick: () => void;
+  onApplyFix?: (id: string) => void;
 }
 
-export function IssueItem({ issue, active, onClick }: IssueItemProps) {
+export function IssueItem({ issue, active, onClick, onApplyFix }: IssueItemProps) {
   const severityColor = {
     error:   'var(--red)',
     warning: 'var(--yellow)',
@@ -73,7 +74,15 @@ export function IssueItem({ issue, active, onClick }: IssueItemProps) {
           )}
 
           {issue.fixable && (
-            <Button variant="primary" size="sm" icon={<Zap size={13} fill="currentColor" />}>
+            <Button 
+              variant="primary" 
+              size="sm" 
+              icon={<Zap size={13} fill="currentColor" />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onApplyFix?.(issue.id);
+              }}
+            >
               Apply Fix
             </Button>
           )}

@@ -7,13 +7,50 @@ interface MetricsPanelProps {
 }
 
 export function MetricsPanel({ file }: MetricsPanelProps) {
+  const issues = file.issues || [];
+  
+  // Broader mapping to ensure bugs and best-practices are correctly categorized into dashboard cards
+  const getCategoryCount = (categories: string[]) => issues.filter(i => 
+    categories.includes(i.category?.toLowerCase() || '')
+  ).length;
+
   const metrics: Metric[] = [
-    { label: 'Complexity', value: 'High', sub: 'Cyclomatic: 24', color: 'var(--red)' },
-    { label: 'Maintainability', value: '64/100', sub: 'Needs refactor', color: 'var(--yellow)' },
-    { label: 'Reliability', value: 'A', sub: '0 bugs found', color: 'var(--green)' },
-    { label: 'Security', value: 'D', sub: '2 vulnerabilities', color: 'var(--red)' },
-    { label: 'Technical Debt', value: '4.2h', sub: 'Estimated fix time', color: 'var(--info)' },
-    { label: 'Coverage', value: '82%', sub: 'Unit tests', color: 'var(--green)' },
+    { 
+      label: 'Complexity', 
+      value: typeof file.cyclomaticComplexity === 'number' ? (file.cyclomaticComplexity > 15 ? 'High' : file.cyclomaticComplexity > 8 ? 'Moderate' : 'Low') : '1', 
+      sub: `Cyclomatic: ${file.cyclomaticComplexity ?? 1}`, 
+      color: typeof file.cyclomaticComplexity === 'number' && file.cyclomaticComplexity > 15 ? 'var(--red)' : (typeof file.cyclomaticComplexity === 'number' && file.cyclomaticComplexity > 8 ? 'var(--yellow)' : 'var(--green)') 
+    },
+    { 
+      label: 'Maintainability', 
+      value: typeof file.score === 'number' ? `${file.score}/100` : '—', 
+      sub: typeof file.score === 'number' && file.score > 80 ? 'Good' : 'Needs attention', 
+      color: typeof file.score === 'number' && file.score > 80 ? 'var(--green)' : 'var(--yellow)' 
+    },
+    { 
+      label: 'Security', 
+      value: getCategoryCount(['security', 'bug', 'vulnerability', 'best-practice']), 
+      sub: 'Security risks', 
+      color: getCategoryCount(['security', 'bug', 'vulnerability', 'best-practice']) > 0 ? 'var(--red)' : 'var(--green)' 
+    },
+    { 
+      label: 'Performance', 
+      value: getCategoryCount(['performance', 'optimization', 'efficiency', 'complexity']), 
+      sub: 'Efficiency issues', 
+      color: getCategoryCount(['performance', 'optimization', 'efficiency', 'complexity']) > 0 ? 'var(--yellow)' : 'var(--green)' 
+    },
+    { 
+      label: 'Cognitive', 
+      value: typeof file.cognitiveComplexity === 'number' ? file.cognitiveComplexity : '0', 
+      sub: 'Mental load', 
+      color: (file.cognitiveComplexity || 0) > 10 ? 'var(--red)' : 'var(--accent)' 
+    },
+    { 
+      label: 'Total Issues', 
+      value: file.issueCount, 
+      sub: `${file.fixedCount} auto-fixable`, 
+      color: 'var(--info)' 
+    },
   ];
 
   return (
@@ -34,24 +71,31 @@ export function MetricsPanel({ file }: MetricsPanelProps) {
       </div>
 
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-        <div style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 12 }}>Complexity Breakdown</div>
+        <div style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 12 }}>Issue Severity Breakdown</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {['processUserData', 'processTag', 'validateInput'].map(fn => (
-            <div key={fn}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-mid)' }}>{fn}()</span>
-                <span style={{ color: 'var(--text-dim)' }}>{fn === 'processTag' ? '86%' : '42%'}</span>
+          {['error', 'warning', 'info'].map(severity => {
+            const count = issues.filter(i => i.severity === severity).length;
+            const pct = issues.length > 0 ? Math.round((count / issues.length) * 100) : 0;
+            const label = severity === 'info' ? 'suggestions' : `${severity}s`;
+            const color = severity === 'error' ? 'var(--red)' : severity === 'warning' ? 'var(--yellow)' : 'var(--info)';
+            
+            return (
+              <div key={severity}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                  <span style={{ textTransform: 'capitalize', color: 'var(--text-mid)' }}>{label}</span>
+                  <span style={{ color: 'var(--text-dim)' }}>{count} ({pct}%)</span>
+                </div>
+                <div style={{ height: 4, background: 'var(--surface-3)', borderRadius: 2 }}>
+                  <div style={{
+                    height: '100%',
+                    background: color,
+                    width: `${pct}%`,
+                    borderRadius: 2
+                  }} />
+                </div>
               </div>
-              <div style={{ height: 4, background: 'var(--surface-3)', borderRadius: 2 }}>
-                <div style={{
-                  height: '100%',
-                  background: fn === 'processTag' ? 'var(--red)' : 'var(--green)',
-                  width: fn === 'processTag' ? '86%' : '42%',
-                  borderRadius: 2
-                }} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

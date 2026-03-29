@@ -10,6 +10,7 @@ export interface Issue {
   fixable: boolean;
   explanation?: string;
   fix?: string;
+  category?: string;
 }
 
 export interface DiffLine {

@@ -13,28 +13,54 @@ export type Context = {
   reply: FastifyReply;
 };
 
+import { createClerkClient } from "@clerk/backend";
+
+const clerk = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY ?? "",
+});
+
 async function syncUser(clerkUserId: string): Promise<NonNullable<Context["user"]> | null> {
   let user: NonNullable<Context["user"]>;
   
   const [existing] = await db
-    .select({ id: users.id, clerkId: users.clerkId, plan: users.plan })
+    .select({ id: users.id, clerkId: users.clerkId, name: users.name, plan: users.plan })
     .from(users)
     .where(eq(users.clerkId, clerkUserId))
     .limit(1);
 
-  if (existing) {
+  if (existing && existing.name !== "New User") {
     user = existing;
   } else {
-    console.log(`[Auth] Provisioning new user for Clerk ID: ${clerkUserId}`);
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        clerkId: clerkUserId,
-        email: `sync_${clerkUserId}@codeopt.dev`,
-        name: "New User",
-      })
-      .returning({ id: users.id, clerkId: users.clerkId, plan: users.plan });
-    user = newUser;
+    // Fetch details from Clerk for a new or un-synced user
+    const clerkUser = await clerk.users.getUser(clerkUserId);
+    const primaryEmail = clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress;
+    const name = clerkUser.firstName ? `${clerkUser.firstName} ${clerkUser.lastName ?? ""}`.trim() : (clerkUser.username || "Anonymous");
+
+    if (existing) {
+      // Update existing user with Clerk profile
+      console.log(`[Auth] Refreshing identity for Clerk ID: ${clerkUserId} (${name})`);
+      await db
+        .update(users)
+        .set({
+          name,
+          email: primaryEmail || undefined,
+          avatarUrl: clerkUser.imageUrl,
+        })
+        .where(eq(users.id, existing.id));
+      user = { id: existing.id, clerkId: existing.clerkId, plan: existing.plan };
+    } else {
+      console.log(`[Auth] Provisioning actual user for Clerk ID: ${clerkUserId} (${name})`);
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          clerkId: clerkUserId,
+          email: primaryEmail || `sync_${clerkUserId}@codeopt.dev`,
+          name: name,
+          avatarUrl: clerkUser.imageUrl,
+        })
+        .returning({ id: users.id, clerkId: users.clerkId, plan: users.plan });
+      user = newUser;
+    }
   }
 
   // Ensure user has at least one workspace
