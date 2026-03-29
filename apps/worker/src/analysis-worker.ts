@@ -5,7 +5,7 @@ import { db } from '@codeopt/db';
 import { analyses, fixes, issues, users } from '@codeopt/db/schema';
 import { Redis } from 'ioredis';
 import { 
-  ANALYSIS_SYSTEM_PROMPT, 
+  buildAnalysisSystemPrompt, 
   buildAnalysisUserPrompt, 
   buildFixPrompt,
   buildASTContext
@@ -93,7 +93,7 @@ export const analysisWorker = new Worker(
       const response = await groq.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
         messages: [
-          { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
+          { role: 'system', content: buildAnalysisSystemPrompt(analysis.language) },
           { role: 'user', content: buildAnalysisUserPrompt(analysis.language, code, astContext) }
         ],
         tools: [REPORT_ISSUE_TOOL],

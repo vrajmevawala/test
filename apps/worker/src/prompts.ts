@@ -34,14 +34,18 @@ export const PYTHON_EXPERT_RULES = `
 - MEMORY: Use __slots__ or generators for large datasets to reduce memory overhead.
 `.trim();
 
-export const ANALYSIS_SYSTEM_PROMPT = `
+export function buildAnalysisSystemPrompt(language: string): string {
+  const isCpp = ['cpp', 'c++', 'clike'].includes(language.toLowerCase());
+  const languageRules = isCpp ? CPP_EXPERT_RULES : PYTHON_EXPERT_RULES;
+
+  return `
 ${BASE_SYSTEM_PROMPT}
 
-You are currently analyzing: {{LANGUAGE}}.
+You are currently analyzing: ${language}.
 You must act as a maximum-level expert in this specific language.
 
-{{LANGUAGE}} SPECIFIC RULES:
-${'{{LANGUAGE}}' === 'cpp' || '{{LANGUAGE}}' === 'C++' ? CPP_EXPERT_RULES : PYTHON_EXPERT_RULES}
+${language} SPECIFIC RULES:
+${languageRules}
 
 CORE OBJECTIVES:
 1. TIME COMPLEXITY: Optimize it while maintaining the original use case.
@@ -54,6 +58,7 @@ OUTPUT RULES:
 - Be precise with line numbers.
 - Provide a "suggestion" explaining the better pattern and why it's faster/cleaner.
 `.trim();
+}
 
 /**
  * CONTEXT BUILDERS
