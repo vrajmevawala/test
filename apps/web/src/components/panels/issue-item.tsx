@@ -45,6 +45,7 @@ export function IssueItem({ issue, active, onClick, onApplyFix }: IssueItemProps
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>Ln {issue.line}</span>
             <Badge variant="dim">{issue.rule}</Badge>
+            {issue.metadata?.timeComplexity && <Badge variant="dim">{issue.metadata.timeComplexity}</Badge>}
             {issue.fixable && <Badge variant="accent">fixable</Badge>}
           </div>
         </div>

@@ -15,6 +15,8 @@ export interface AnalysisFile {
   code: string;
   cyclomaticComplexity?: number;
   cognitiveComplexity?: number;
+  timeComplexity?: string;
+  complexityScore?: number;
 }
 
 export interface Metric {

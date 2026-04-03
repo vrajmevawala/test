@@ -30,30 +30,52 @@ type ReportedIssue = {
   suggestion?: string;
   codeSnippet?: string;
   fixable?: boolean;
+  metricsImpact?: {
+    timeComplexity?: string;
+    spaceComplexity?: string;
+  };
 };
 
-const REPORT_ISSUE_TOOL = {
+const COMPLETE_ANALYSIS_TOOL = {
   type: 'function' as const,
   function: {
-    name: 'report_issue',
-    description: 'Structured issue output for code analysis',
+    name: 'complete_analysis',
+    description: 'Report all analysis findings including issues and overall code metrics',
     parameters: {
       type: 'object',
       properties: {
-        line: { type: 'number' },
-        col: { type: 'number' },
-        severity: { type: 'string', enum: ['error', 'warning', 'info'] },
-        category: {
-          type: 'string',
-          enum: ['security', 'performance', 'complexity', 'style', 'best-practice', 'bug'],
+        issues: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              line: { type: 'number' },
+              col: { type: 'number' },
+              severity: { type: 'string', enum: ['error', 'warning', 'info'] },
+              category: {
+                type: 'string',
+                enum: ['security', 'performance', 'complexity', 'style', 'best-practice', 'bug'],
+              },
+              rule: { type: 'string' },
+              message: { type: 'string' },
+              suggestion: { type: 'string' },
+              codeSnippet: { type: 'string' },
+              fixable: { type: 'boolean' },
+              metricsImpact: {
+                type: 'object',
+                properties: {
+                  timeComplexity: { type: 'string' },
+                  spaceComplexity: { type: 'string' },
+                }
+              },
+            },
+            required: ['line', 'severity', 'category', 'rule', 'message'],
+          }
         },
-        rule: { type: 'string' },
-        message: { type: 'string' },
-        suggestion: { type: 'string' },
-        codeSnippet: { type: 'string' },
-        fixable: { type: 'boolean' },
+        overallTimeComplexity: { type: 'string', description: 'Overall Big O time complexity (e.g., O(n))' },
+        overallComplexityScore: { type: 'number', description: 'Score from 0-100 indicating how optimal the complexity is' },
       },
-      required: ['line', 'severity', 'category', 'rule', 'message'],
+      required: ['issues', 'overallTimeComplexity', 'overallComplexityScore'],
     },
   },
 };
@@ -78,13 +100,8 @@ export const analysisWorker = new Worker(
         throw new Error('No source code available for analysis');
       }
 
-      // CLEAR OLD RESULTS (For In-place updates)
       await db.delete(issues).where(eq(issues.analysisId, analysisId));
-      // Fixes are cascading deleted by DB or handled by the app-level logic here.
-      // Since fixes refer to issueId, deleting issues will clear them if cascade is set, 
-      // but let's be explicit if needed. The DB schema should handle this.
 
-      // PRE-ANALYSIS: Run Structural Tree-sitter Pass
       const astMetrics = ['python', 'cpp', 'c++'].includes(analysis.language.toLowerCase()) 
         ? await getTreeSitterAnalysis(code, analysis.language) 
         : null;
@@ -96,14 +113,21 @@ export const analysisWorker = new Worker(
           { role: 'system', content: buildAnalysisSystemPrompt(analysis.language) },
           { role: 'user', content: buildAnalysisUserPrompt(analysis.language, code, astContext) }
         ],
-        tools: [REPORT_ISSUE_TOOL],
-        tool_choice: 'auto',
+        tools: [COMPLETE_ANALYSIS_TOOL],
+        tool_choice: { type: 'function', function: { name: 'complete_analysis' } },
       });
 
-      const toolCalls = response.choices[0]?.message?.tool_calls || [];
-      const reportedIssues: ReportedIssue[] = toolCalls
-        .filter((tc) => tc.function.name === 'report_issue')
-        .map((tc) => JSON.parse(tc.function.arguments));
+      const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+      if (!toolCall || toolCall.function.name !== 'complete_analysis') {
+        throw new Error('LLM failed to provide a valid complete_analysis tool call.');
+      }
+
+      const args = JSON.parse(toolCall.function.arguments);
+      const reportedIssues: ReportedIssue[] = args.issues || [];
+      const overallComplexity = {
+        timeComplexity: args.overallTimeComplexity,
+        complexityScore: args.overallComplexityScore,
+      };
 
       const score = Math.max(
         0,
@@ -131,6 +155,9 @@ export const analysisWorker = new Worker(
             suggestion: issue.suggestion,
             codeSnippet: issue.codeSnippet || code.split('\n')[(snapped?.line ?? issue.line) - 1] || '',
             fixable: issue.fixable ?? false,
+            metadata: (issue.metricsImpact?.timeComplexity || issue.metricsImpact?.spaceComplexity) 
+              ? { timeComplexity: issue.metricsImpact.timeComplexity, spaceComplexity: issue.metricsImpact.spaceComplexity } 
+              : null,
           };
         }));
 
@@ -182,6 +209,11 @@ export const analysisWorker = new Worker(
           score,
           cyclomaticComplexity: astMetrics?.cyclomaticComplexity || null,
           cognitiveComplexity: astMetrics?.cognitiveComplexity || null,
+          metadata: { 
+            ...((analysis.metadata as any) || {}), 
+            timeComplexity: overallComplexity?.timeComplexity || null, 
+            complexityScore: overallComplexity?.complexityScore || null 
+          },
           tokensUsed: response.usage?.total_tokens || 0,
           completedAt: new Date(),
           updatedAt: new Date(),

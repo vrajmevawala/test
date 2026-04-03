@@ -24,6 +24,8 @@ interface Tab {
   status?: string;
   cyclomaticComplexity?: number;
   cognitiveComplexity?: number;
+  timeComplexity?: string;
+  complexityScore?: number;
 }
 
 const LANGUAGES = [
@@ -99,15 +101,18 @@ export default function AnalyzePage() {
           status: detail.status,
           cyclomaticComplexity: detail.cyclomaticComplexity,
           cognitiveComplexity: detail.cognitiveComplexity,
+          timeComplexity: detail.metadata?.timeComplexity,
+          complexityScore: detail.metadata?.complexityScore,
           issues: (detail.issues || []).map((i: any) => ({
             id: i.id,
             line: i.line,
-            column: i.col,
+            column: i.column || i.col || 0,
             severity: i.severity,
             message: i.message,
             rule: i.rule,
             fixable: i.fixable,
             fix: i.fix,
+            metadata: i.metadata,
           })),
           fixedCount: (detail.issues || []).filter((i: any) => i.fixable).length,
           };
@@ -213,15 +218,18 @@ export default function AnalyzePage() {
           status: result.status,
           cyclomaticComplexity: result.cyclomaticComplexity,
           cognitiveComplexity: result.cognitiveComplexity,
+          timeComplexity: result.metadata?.timeComplexity,
+          complexityScore: result.metadata?.complexityScore,
           issues: (result.issues || []).map((i: any) => ({
             id: i.id,
             line: i.line,
-            column: i.col,
+            column: i.column || i.col || 0,
             severity: i.severity,
             message: i.message,
             rule: i.rule,
             fixable: i.fixable,
             fix: i.fix,
+            metadata: i.metadata,
           })),
           fixedCount: (result.issues || []).filter((i: any) => i.fixable).length,
         } : t));
@@ -375,6 +383,8 @@ export default function AnalyzePage() {
                   date: '',
                   cyclomaticComplexity: activeTab.cyclomaticComplexity,
                   cognitiveComplexity: activeTab.cognitiveComplexity,
+                  timeComplexity: activeTab.timeComplexity,
+                  complexityScore: activeTab.complexityScore,
                 }}
                 activeIssueId={activeIssueId}
                 onIssueClick={(id) => setActiveIssueId(activeIssueId === id ? undefined : id)}

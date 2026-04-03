@@ -11,6 +11,10 @@ export interface Issue {
   explanation?: string;
   fix?: string;
   category?: string;
+  metadata?: {
+    timeComplexity?: string;
+    spaceComplexity?: string;
+  };
 }
 
 export interface DiffLine {

@@ -192,9 +192,11 @@ export const analysisRouter = t.router({
           line: issues.line,
           column: issues.col,
           severity: issues.severity,
+          category: issues.category,
           message: issues.message,
           rule: issues.rule,
           fixable: issues.fixable,
+          metadata: issues.metadata,
           fix: fixes.fixedCode,
         })
         .from(issues)

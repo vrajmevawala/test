@@ -17,9 +17,9 @@ export function MetricsPanel({ file }: MetricsPanelProps) {
   const metrics: Metric[] = [
     { 
       label: 'Complexity', 
-      value: typeof file.cyclomaticComplexity === 'number' ? (file.cyclomaticComplexity > 15 ? 'High' : file.cyclomaticComplexity > 8 ? 'Moderate' : 'Low') : '1', 
-      sub: `Cyclomatic: ${file.cyclomaticComplexity ?? 1}`, 
-      color: typeof file.cyclomaticComplexity === 'number' && file.cyclomaticComplexity > 15 ? 'var(--red)' : (typeof file.cyclomaticComplexity === 'number' && file.cyclomaticComplexity > 8 ? 'var(--yellow)' : 'var(--green)') 
+      value: file.timeComplexity || (typeof file.cyclomaticComplexity === 'number' ? (file.cyclomaticComplexity > 15 ? 'High' : file.cyclomaticComplexity > 8 ? 'Moderate' : 'Low') : '1'), 
+      sub: file.complexityScore ? `Score: ${file.complexityScore}/100` : `Cyclomatic: ${file.cyclomaticComplexity ?? 1}`, 
+      color: typeof file.cyclomaticComplexity === 'number' && file.cyclomaticComplexity > 15 && !file.complexityScore ? 'var(--red)' : ((file.complexityScore ?? 0) > 80 ? 'var(--green)' : ((file.complexityScore ?? 0) > 50 ? 'var(--yellow)' : ((file.cyclomaticComplexity ?? 0) > 8 ? 'var(--yellow)' : 'var(--green)'))) 
     },
     { 
       label: 'Maintainability', 
