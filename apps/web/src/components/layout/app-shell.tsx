@@ -62,7 +62,6 @@ export function AppShell({ children }: AppShellProps) {
           {children}
         </main>
       </div>
-      <BotWidget />
     </div>
   );
 }

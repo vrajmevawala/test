@@ -3,10 +3,10 @@ import Groq from 'groq-sdk';
 import { Redis } from '@upstash/redis';
 import { db } from '@codeopt/db';
 import { buildSystemPrompt } from '../bot/prompt.js';
-import { BOT_TOOLS, executeTool } from '../bot/tools.js';
 import { verifyToken } from '@clerk/backend';
 import { and, eq } from 'drizzle-orm';
-import { teamMembers, users } from '@codeopt/db/schema';
+import { analyses, issues, teamMembers, users } from '@codeopt/db/schema';
+import { PassThrough } from 'node:stream';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY ?? '',
@@ -18,9 +18,27 @@ const redis = new Redis({
 });
 
 export const botRoute: FastifyPluginAsync = async (app) => {
+  app.get('/history/:conversationId', async (req, reply) => {
+    const { conversationId } = req.params as { conversationId: string };
+    const historyKey = `conv:${conversationId}`;
+    const rawHistory = await redis.lrange(historyKey, 0, -1);
+    
+    return rawHistory.map((r) => {
+      if (typeof r === 'string') {
+        try {
+          return JSON.parse(r);
+        } catch {
+          return null;
+        }
+      }
+      return r;
+    }).filter(Boolean);
+  });
+
   app.post('/chat', async (req, reply) => {
-    // ... (logic for token and user remains the same)
-    const token = req.headers.authorization?.replace('Bearer ', '');
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '');
+    
     if (!token) {
       return reply.status(401).send({ error: 'Unauthorized' });
     }
@@ -36,7 +54,7 @@ export const botRoute: FastifyPluginAsync = async (app) => {
     const { message, conversationId, context } = req.body as {
       message: string;
       conversationId: string;
-      context: Record<string, unknown>;
+      context: Record<string, any>;
     };
 
     if (!message?.trim()) {
@@ -72,15 +90,58 @@ export const botRoute: FastifyPluginAsync = async (app) => {
       }
     }
 
+    // Fetch context from DB if analysisId is present
+    const analysisId = context.analysisId as string | undefined;
+    if (analysisId) {
+      const [analysisRecord] = await db
+        .select()
+        .from(analyses)
+        .where(eq(analyses.id, analysisId))
+        .limit(1);
+
+      if (analysisRecord) {
+        const analysisIssues = await db
+          .select()
+          .from(issues)
+          .where(eq(issues.analysisId, analysisId));
+
+        context.code = (analysisRecord.metadata as any)?.sourceCode || '';
+        context.issues = analysisIssues.map(i => ({
+          line: i.line,
+          severity: i.severity,
+          message: i.message,
+          category: i.category,
+        }));
+        context.score = analysisRecord.score;
+      }
+    }
+
     const historyKey = `conv:${conversationId}`;
     const rawHistory = await redis.lrange(historyKey, -40, -1);
-    const history = rawHistory.map((r) => JSON.parse(r as string));
+    const history = rawHistory.map((r) => {
+      if (typeof r === 'string') {
+        try {
+          return JSON.parse(r);
+        } catch {
+          return null;
+        }
+      }
+      return r;
+    }).filter(Boolean);
+    
     const systemPrompt = buildSystemPrompt({ user, context });
 
-    reply.raw.setHeader('Content-Type', 'text/event-stream');
-    reply.raw.setHeader('Cache-Control', 'no-cache');
-    reply.raw.setHeader('Connection', 'keep-alive');
-    reply.raw.setHeader('X-Accel-Buffering', 'no');
+    // Create a PassThrough stream for SSE
+    const stream = new PassThrough();
+    
+    // Set headers and send the stream via Fastify's native reply.send
+    // This allows Fastify's CORS middleware to attach headers correctly
+    reply
+      .type('text/event-stream')
+      .header('Cache-Control', 'no-cache')
+      .header('Connection', 'keep-alive')
+      .header('X-Accel-Buffering', 'no')
+      .send(stream);
 
     let fullReply = '';
     try {
@@ -100,23 +161,25 @@ export const botRoute: FastifyPluginAsync = async (app) => {
         const token = chunk.choices[0]?.delta?.content || '';
         if (token) {
           fullReply += token;
-          reply.raw.write(`data: ${JSON.stringify({ type: 'token', token })}\n\n`);
+          stream.write(`data: ${JSON.stringify({ type: 'token', token })}\n\n`);
         }
       }
 
+      // Store history in the background
       await redis.rpush(
         historyKey,
-        JSON.stringify({ role: 'user', content: message }),
-        JSON.stringify({ role: 'assistant', content: fullReply }),
+        { role: 'user', content: message },
+        { role: 'assistant', content: fullReply },
       );
       await redis.expire(historyKey, 60 * 60 * 24 * 7);
 
-      reply.raw.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-      reply.raw.end();
-    } catch (e) {
+      stream.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      stream.end();
+    } catch (e: any) {
       console.error("[Groq] Chat error:", e);
-      reply.raw.write(`data: ${JSON.stringify({ type: 'error', message: 'AI service error' })}\n\n`);
-      reply.raw.end();
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      stream.write(`data: ${JSON.stringify({ type: 'error', message: errorMessage })}\n\n`);
+      stream.end();
     }
   });
 };

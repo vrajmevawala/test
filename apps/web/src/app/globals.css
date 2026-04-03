@@ -151,3 +151,43 @@ code, pre { font-family: var(--font-mono); }
 .border-color { border-color: var(--border); }
 
 .divide-surface > * + * { border-top: 1px solid var(--border); }
+
+/* Chatbot Markdown Styling */
+.chatbot-markdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.chatbot-markdown p {
+  margin: 0;
+}
+
+.chatbot-markdown ul, .chatbot-markdown ol {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.chatbot-markdown li {
+  list-style-type: disc;
+}
+
+.chatbot-markdown b, .chatbot-markdown strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chatbot-markdown code {
+  background: var(--surface-3);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+/* Chatbot Drag Cursors */
+.cursor-grab { cursor: grab; }
+.cursor-grabbing { cursor: grabbing; }

@@ -1,29 +1,96 @@
 'use client';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useBotStore } from '@/stores/bot.store';
-import { SendIcon, Sparkles } from 'lucide-react';
+import { Send as SendIcon, Sparkles } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useAuth } from '@clerk/nextjs';
 
 export function ChatInput() {
-  const [text, setText] = useState('');
-  const { addMessage, setStreaming, isStreaming } = useBotStore();
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { addMessage, updateLastMessage, isStreaming, context, conversationId, setStreaming } = useBotStore();
+  const { getToken } = useAuth();
+  const [message, setMessage] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize logic
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const newHeight = Math.min(textarea.scrollHeight, 160);
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, [message]);
 
   const handleSend = async () => {
-    if (!text.trim() || isStreaming) return;
+    if (!message.trim() || isStreaming) return;
 
-    const userMsg = text;
-    setText('');
-    addMessage({ role: 'user', content: userMsg });
+    const userMessage = message.trim();
+    setMessage('');
+    // Reset height after sending
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
     
-    // Placeholder for API call
+    addMessage({ role: 'user', content: userMessage });
     setStreaming(true);
     addMessage({ role: 'assistant', content: '' });
-    
-    // Simulate streaming for now
-    setTimeout(() => {
+
+    try {
+      const token = await getToken();
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/bot/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          conversationId,
+          context: {
+            ...context,
+            page: window.location.pathname,
+          },
+        }),
+      });
+
+      if (!response.ok) throw new Error('Chat failed');
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              if (data.type === 'token') {
+                updateLastMessage(data.token);
+              } else if (data.type === 'error') {
+                updateLastMessage(`\n\n**Error**: ${data.message}`);
+              }
+            } catch (e) {
+              console.warn("Malformed SSE line:", line);
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.error("Chat error:", e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      updateLastMessage(`\n\n**Error**: ${errorMessage}. Please try again.`);
+    } finally {
       setStreaming(false);
-    }, 2000);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -34,34 +101,37 @@ export function ChatInput() {
   };
 
   return (
-    <div className="p-3 border-t border-[var(--border)] bg-[var(--surface)]">
-      <div className="relative flex items-end gap-2 bg-[var(--surface-2)] border border-[var(--border)] rounded-xl px-3 py-2 focus-within:border-[var(--accent)] transition-all shadow-sm">
+    <div className="p-6 bg-[var(--surface)] border-t border-[var(--border)]/60">
+      <div className="relative group">
         <textarea
-          ref={inputRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+          ref={textareaRef}
+          rows={1}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask a question..."
-          rows={1}
-          className="flex-1 bg-transparent border-none outline-none text-[13px] text-[var(--text)] resize-none py-1 min-h-[22px] max-h-32 scrollbar-hide"
-          style={{ height: 'auto' }}
+          className="w-full bg-[var(--surface-2)] text-[13px] text-[var(--text)] placeholder:text-[var(--text-dim)] border border-[var(--border)]/80 rounded-[28px] py-4 pl-6 pr-14 focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/10 transition-all resize-none overflow-y-auto scrollbar-hide min-h-[52px] shadow-sm"
         />
         <button
           onClick={handleSend}
-          disabled={!text.trim() || isStreaming}
+          disabled={!message.trim() || isStreaming}
           className={clsx(
-            'p-1.5 rounded-lg transition-all shrink-0',
-            text.trim() && !isStreaming 
-              ? 'bg-[var(--accent)] text-[#0d1117] hover:opacity-90' 
-              : 'text-[var(--text-dim)] cursor-not-allowed'
+            'absolute right-3.5 bottom-3.5 p-2 rounded-[20px] transition-all duration-300',
+            message.trim() && !isStreaming 
+              ? 'bg-[var(--accent)] text-[#0d1117] shadow-lg shadow-[var(--accent)]/40 hover:scale-105 active:scale-95' 
+              : 'text-[var(--text-dim)] cursor-not-allowed opacity-40'
           )}
         >
-          <SendIcon size={14} />
+          {isStreaming ? (
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <SendIcon size={18} />
+          )}
         </button>
       </div>
-      <div className="flex items-center gap-1.5 mt-2 px-1 text-[10px] text-[var(--text-dim)] font-medium">
-        <Sparkles size={10} className="text-[var(--accent)]" />
-        <span>Context-aware: Analyzing {`api/userController.js`}</span>
+      <div className="flex items-center gap-2 mt-4 px-2 text-[10px] text-[var(--text-mid)] font-semibold uppercase tracking-widest opacity-80">
+        <Sparkles size={11} className="text-[var(--accent)]" />
+        <span>Context-aware: {context.filename || 'active file'}</span>
       </div>
     </div>
   );

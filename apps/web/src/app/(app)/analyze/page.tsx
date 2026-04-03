@@ -50,7 +50,7 @@ export default function AnalyzePage() {
   const [editingName, setEditingName] = useState('');
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const searchParams = useSearchParams();
-  const { setOpen: setChatOpen } = useBotStore();
+  const { setOpen: setChatOpen, setContext, loadHistory } = useBotStore();
 
   const handleRename = (id: string, newName: string) => {
     if (!newName.trim()) return;
@@ -180,6 +180,25 @@ export default function AnalyzePage() {
 
   const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId), [tabs, activeTabId]);
   const activeIssue = useMemo(() => activeTab?.issues?.find(i => i.id === activeIssueId), [activeTab, activeIssueId]);
+
+  // ... existing code ...
+
+  useEffect(() => {
+    if (activeTab && !activeTab.isDraft) {
+      setContext({
+        analysisId: activeTab.id,
+        filename: activeTab.name,
+        score: activeTab.score,
+        language: activeTab.language,
+      });
+      loadHistory(`file:${activeTab.id}`);
+    } else if (activeTab?.isDraft) {
+      setContext({
+        filename: activeTab.name,
+        isDraft: true,
+      });
+    }
+  }, [activeTab?.id, setContext, loadHistory]);
 
   const handleAnalyze = async () => {
     const targetTab = activeTab;

@@ -27,25 +27,20 @@
   "content_scripts": [
     {
       "js": [
-        "src/content/index.ts-loader.js"
+        "assets/index.ts-loader-CyN_VDzV.js"
       ],
       "matches": [
         "<all_urls>"
       ]
     }
   ],
-  "background": {
-    "service_worker": "service-worker-loader.js",
-    "type": "module"
-  },
   "web_accessible_resources": [
     {
       "matches": [
         "<all_urls>"
       ],
       "resources": [
-        "**/*",
-        "*"
+        "assets/index.ts-CG5mJCM2.js"
       ],
       "use_dynamic_url": true
     }
