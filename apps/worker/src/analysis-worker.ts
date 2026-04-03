@@ -129,13 +129,15 @@ export const analysisWorker = new Worker(
         complexityScore: args.overallComplexityScore,
       };
 
-      const score = Math.max(
-        0,
-        100 -
-          reportedIssues.filter((i) => i.severity === 'error').length * 12 -
-          reportedIssues.filter((i) => i.severity === 'warning').length * 5 -
-          reportedIssues.filter((i) => i.severity === 'info').length,
+      const lineCount = code.split('\n').length;
+      const densityFactor = Math.max(1, lineCount / 100);
+      const rawDeductions = (
+        reportedIssues.filter((i) => i.severity === 'error').length * 12 +
+        reportedIssues.filter((i) => i.severity === 'warning').length * 5 +
+        reportedIssues.filter((i) => i.severity === 'info').length
       );
+
+      const score = Math.max(0, Math.round(100 - (rawDeductions / densityFactor)));
 
       let insertedIssueRows: Array<{ id: string; message: string }> = [];
       if (reportedIssues.length > 0) {
@@ -207,6 +209,7 @@ export const analysisWorker = new Worker(
         .set({
           status: 'complete',
           score,
+          linesOfCode: lineCount,
           cyclomaticComplexity: astMetrics?.cyclomaticComplexity || null,
           cognitiveComplexity: astMetrics?.cognitiveComplexity || null,
           metadata: { 
