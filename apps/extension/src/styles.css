@@ -1,21 +1,21 @@
 :root {
-  --bg:         #0d1117;
-  --surface:    #161b22;
-  --surface-2:  #21262d;
-  --surface-3:  #30363d;
-  --border:     #30363d;
-  --text:       #e6edf3;
-  --text-mid:   #8b949e;
-  --text-dim:   #484f58;
-  --accent:     #f0883e;
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-2: #21262d;
+  --surface-3: #30363d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-mid: #8b949e;
+  --text-dim: #484f58;
+  --accent: #f0883e;
   --accent-dim: rgba(240, 136, 62, 0.12);
-  --green:      #3fb950;
-  --red:        #ff7b72;
-  --yellow:     #e3b341;
-  --info:       #79c0ff;
-  --radius-md:  8px;
-  --font-ui:    'Inter', sans-serif;
-  --font-mono:  'JetBrains Mono', monospace;
+  --green: #3fb950;
+  --red: #ff7b72;
+  --yellow: #e3b341;
+  --info: #79c0ff;
+  --radius-md: 8px;
+  --font-ui: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
 body {
@@ -54,7 +54,10 @@ body {
   border: none;
   transition: opacity 0.2s;
 }
-.btn-primary:hover { opacity: 0.9; }
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
 
 .btn-secondary {
   background: var(--surface-2);

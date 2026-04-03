@@ -41,7 +41,7 @@ export const MinimalCarousel: React.FC<MinimalCarouselProps> = ({
       >
         {/* Container  */}
         <div className="w-full max-w-7xl mx-auto">
-          <motion.div layout className="flex flex-col gap-12">
+          <motion.div layout className="flex flex-col" style={{ gap: 32 }}>
 
             {/* Expanded Card */}
             <AnimatePresence mode="popLayout">
@@ -50,20 +50,20 @@ export const MinimalCarousel: React.FC<MinimalCarouselProps> = ({
                   key={activeCard.id}
                   layoutId={activeCard.id}
                   className={`relative flex w-full flex-col justify-between
-                             rounded-[36px] p-10 sm:p-14 text-white shadow-xl
-                             ${activeCard.color}
-                             min-h-[220px] sm:min-h-[260px]`}
+                             rounded-[36px] text-white shadow-xl
+                             ${activeCard.color}`}
+                  style={{ padding: '48px 56px', minHeight: 260 }}
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                 >
                   <div className="flex items-start">
-                    <activeCard.icon size={48} className="sm:w-16 sm:h-16 opacity-90" />
+                    <activeCard.icon size={48} style={{ opacity: 0.9 }} />
                   </div>
 
-                  <div className="flex flex-col items-start text-left mt-8">
-                    <h3 className="text-2xl sm:text-3xl font-bold opacity-100 tracking-tight leading-tight">
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', marginTop: 32 }}>
+                    <h3 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                       {activeCard.title}
                     </h3>
-                    <p className="text-base sm:text-lg font-medium tracking-tight opacity-70 mt-1">
+                    <p style={{ fontSize: 16, fontWeight: 500, opacity: 0.7, marginTop: 6 }}>
                       {activeCard.value}
                     </p>
                   </div>
@@ -73,8 +73,8 @@ export const MinimalCarousel: React.FC<MinimalCarouselProps> = ({
 
             <motion.div
               layout
-              className={`grid transition-all duration-500 gap-6 sm:gap-8 ${activeId ? "grid-cols-3" : "grid-cols-2"
-                }`}
+              className={`grid transition-all duration-500 ${activeId ? "grid-cols-3" : "grid-cols-2"}`}
+              style={{ gap: 24 }}
             >
               {(activeId ? secondaryCards : cards).map((card) => (
                 <motion.div
@@ -86,24 +86,22 @@ export const MinimalCarousel: React.FC<MinimalCarouselProps> = ({
                   }}
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                   className={`relative flex flex-col justify-between cursor-pointer
-                             rounded-[28px] sm:rounded-[32px] p-8 sm:p-10 text-white shadow-lg
-                             ${card.color}
-                             ${activeId ? "h-[180px] sm:h-[200px]" : "h-[240px] sm:h-[280px]"}`}
+                             rounded-[28px] text-white shadow-lg
+                             ${card.color}`}
+                  style={{ padding: '28px 32px', height: activeId ? 170 : 220 }}
                 >
-                  <div className="flex justify-between items-start">
-                    <card.icon size={32} className="shrink-0 opacity-90" />
-                    <div className="rounded-full bg-white/10 p-1.5 sm:p-2 transition-colors hover:bg-white/20">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <card.icon size={32} style={{ flexShrink: 0, opacity: 0.9 }} />
+                    <div style={{ borderRadius: '50%', background: 'rgba(255,255,255,0.1)', padding: 8, transition: 'background 0.15s' }}>
                       <MoreHorizontal size={20} />
                     </div>
                   </div>
 
-                  <div className="mt-8 flex flex-col items-start text-left">
-                    <h4 className={`${activeId ? "text-sm sm:text-base" : "text-lg sm:text-xl"} 
-                                   font-bold opacity-100 leading-tight`}>
+                  <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', paddingBottom: 4 }}>
+                    <h4 style={{ fontSize: activeId ? 14 : 20, fontWeight: 700, lineHeight: 1.2 }}>
                       {card.title}
                     </h4>
-                    <p className={`${activeId ? "text-[10px] sm:text-sm" : "text-sm sm:text-base"} 
-                                   font-medium text-white/70 mt-1`}>
+                    <p style={{ fontSize: activeId ? 12 : 14, fontWeight: 500, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
                       {card.value}
                     </p>
                   </div>

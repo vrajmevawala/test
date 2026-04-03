@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "CodeOptimizer AI",
+  "name": "CodeSage AI",
   "version": "1.0.0",
   "description": "AI-powered code analysis and optimization directly in your browser.",
   "permissions": ["activeTab", "storage", "scripting"],
