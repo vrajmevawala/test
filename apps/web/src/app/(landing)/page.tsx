@@ -102,7 +102,7 @@ export default function LandingPage() {
           </p>
 
           <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}>
-            <Link
+            {/* <Link
               href="/login"
               style={{
                 height: 42, padding: '0 24px', borderRadius: 'var(--radius-md)',
@@ -111,12 +111,12 @@ export default function LandingPage() {
               }}
             >
               Start Free — No credit card <ArrowRight size={15} />
-            </Link>
+            </Link> */}
             <Link
               href="/playground"
               style={{
                 height: 42, padding: '0 20px', borderRadius: 'var(--radius-md)',
-                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                background: 'var(--accent)', border: '1px solid var(--border)',
                 color: 'var(--text)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
                 fontFamily: 'var(--font-ui)', display: 'flex', alignItems: 'center', gap: 8,
                 textDecoration: 'none'
@@ -124,16 +124,20 @@ export default function LandingPage() {
             >
               Try Playground
             </Link>
-            <button
+            <a
+              href="https://github.com/apps/codesage-2026/installations/new"
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 height: 42, padding: '0 20px', borderRadius: 'var(--radius-md)',
                 background: 'var(--surface-2)', border: '1px solid var(--border)',
                 color: 'var(--text)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
                 fontFamily: 'var(--font-ui)', display: 'flex', alignItems: 'center', gap: 8,
+                textDecoration: 'none',
               }}
             >
               <GithubIcon size={15} /> GitHub App
-            </button>
+            </a>
           </div>
 
           <div style={{ display: 'flex', gap: 32 }}>

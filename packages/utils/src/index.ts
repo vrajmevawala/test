@@ -1,1 +1,1 @@
-export * from './ai/index.ts';
+export * from './ai/index.js';

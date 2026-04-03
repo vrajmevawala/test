@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { and, count, desc, eq, ilike, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { analyses, issues, users } from '@codeopt/db/schema';
+import { analyses, issues, users, fixes } from '@codeopt/db/schema';
 import { t } from '../init.js';
 import { adminProcedure, developerProcedure, workspaceProcedure } from '../middleware.js';
 import { enqueueAnalysis } from '../../jobs/analysis-queue.js';
@@ -10,7 +10,7 @@ export const analysisRouter = t.router({
     create: developerProcedure
         .input(z.object({
         filename: z.string().min(1).max(512),
-        language: z.enum(['python', 'cpp', 'plaintext']),
+        language: z.enum(['typescript', 'javascript', 'python', 'go', 'rust', 'java', 'cpp', 'csharp', 'ruby', 'php']),
         contentSize: z.number().min(1).max(500_000),
         sourceCode: z.string().min(1),
         id: z.string().uuid().optional(),
@@ -127,15 +127,13 @@ export const analysisRouter = t.router({
                 score: analyses.score,
                 createdAt: analyses.createdAt,
                 completedAt: analyses.completedAt,
-                issueCount: count(issues.id),
-                fixedCount: sql `COUNT(CASE WHEN ${issues.fixApplied} THEN 1 END)`,
+                issueCount: sql `(SELECT count(*) FROM issues WHERE analysis_id = ${analyses.id})`,
+                fixedCount: sql `(SELECT count(*) FROM issues WHERE analysis_id = ${analyses.id} AND fix_applied = true)`,
                 createdByName: users.name,
             })
                 .from(analyses)
-                .leftJoin(issues, eq(issues.analysisId, analyses.id))
                 .leftJoin(users, eq(users.id, analyses.createdById))
                 .where(and(...filters))
-                .groupBy(analyses.id, users.name)
                 .orderBy(desc(analyses.createdAt))
                 .limit(input.pageSize)
                 .offset(offset),
@@ -170,12 +168,15 @@ export const analysisRouter = t.router({
             line: issues.line,
             column: issues.col,
             severity: issues.severity,
+            category: issues.category,
             message: issues.message,
             rule: issues.rule,
             fixable: issues.fixable,
-            fix: sql `(SELECT fixed_code FROM fixes WHERE issue_id = issues.id LIMIT 1)`,
+            metadata: issues.metadata,
+            fix: fixes.fixedCode,
         })
             .from(issues)
+            .leftJoin(fixes, eq(fixes.issueId, issues.id))
             .where(eq(issues.analysisId, analysis.id))
             .orderBy(issues.severity, issues.line);
         return { ...analysis, issues: analysisIssues };

@@ -71,10 +71,12 @@ export const publicAnalysisRoute = async (app) => {
             const issues = toolCalls
                 .filter((tc) => tc.function.name === 'report_issue')
                 .map((tc) => JSON.parse(tc.function.arguments));
-            const score = Math.max(0, 100 -
-                issues.filter((i) => i.severity === 'error').length * 12 -
-                issues.filter((i) => i.severity === 'warning').length * 5 -
+            const lineCount = code.split('\n').length;
+            const densityFactor = Math.max(1, lineCount / 100);
+            const rawDeductions = (issues.filter((i) => i.severity === 'error').length * 12 +
+                issues.filter((i) => i.severity === 'warning').length * 5 +
                 issues.filter((i) => i.severity === 'info').length);
+            const score = Math.max(0, Math.round(100 - (rawDeductions / densityFactor)));
             return reply.send({
                 success: true,
                 score,

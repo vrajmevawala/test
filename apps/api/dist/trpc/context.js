@@ -6,6 +6,10 @@ import { createClerkClient } from "@clerk/backend";
 const clerk = createClerkClient({
     secretKey: process.env.CLERK_SECRET_KEY ?? "",
 });
+// Simple In-memory Session Cache (TTL: 5 minutes)
+// This avoids redundant context lookups for multiple concurrent TRPC requests.
+const sessionCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000;
 async function syncUser(clerkUserId) {
     let user;
     const [existing] = await db
@@ -91,22 +95,41 @@ export async function createContext({ req, res }) {
         console.error("[Auth] Token verification failed:", err);
         return { db, user: null, workspaceId: null, memberRole: null, req, reply: res };
     }
-    const user = await syncUser(clerkUserId);
-    if (!user) {
-        return { db, user: null, workspaceId: null, memberRole: null, req, reply: res };
-    }
     const workspaceId = (req.headers["x-workspace-id"] ?? null) || null;
-    let memberRole = null;
-    if (workspaceId) {
-        const [membership] = await db
-            .select({ role: teamMembers.role })
-            .from(teamMembers)
-            .where(and(eq(teamMembers.workspaceId, workspaceId), eq(teamMembers.userId, user.id), eq(teamMembers.status, "active")))
-            .limit(1);
-        if (membership) {
-            memberRole = membership.role;
-        }
+    const cacheKey = `${clerkUserId}:${workspaceId ?? 'none'}`;
+    const cached = sessionCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+        return { db, user: cached.user, workspaceId, memberRole: cached.memberRole, req, reply: res };
     }
-    return { db, user, workspaceId, memberRole, req, reply: res };
+    // CONSOLIDATED QUERY: Fetch User and Membership in a single JOIN
+    // This reduces context setup from 3-4 hits to 1-2 hits.
+    const [result] = await db
+        .select({
+        user: { id: users.id, clerkId: users.clerkId, plan: users.plan },
+        role: teamMembers.role
+    })
+        .from(users)
+        .leftJoin(teamMembers, and(eq(teamMembers.userId, users.id), workspaceId ? eq(teamMembers.workspaceId, workspaceId) : undefined, eq(teamMembers.status, "active")))
+        .where(eq(users.clerkId, clerkUserId))
+        .limit(1);
+    if (!result) {
+        // If not in DB yet (first time), fall back to syncUser
+        const user = await syncUser(clerkUserId);
+        if (!user)
+            return { db, user: null, workspaceId: null, memberRole: null, req, reply: res };
+        // Store in cache for next hit
+        sessionCache.set(cacheKey, { user, memberRole: null, workspaceId, expiresAt: Date.now() + CACHE_TTL });
+        return { db, user, workspaceId, memberRole: null, req, reply: res };
+    }
+    // Store in cache for next hit
+    sessionCache.set(cacheKey, { user: result.user, memberRole: result.role, workspaceId, expiresAt: Date.now() + CACHE_TTL });
+    return {
+        db,
+        user: result.user,
+        workspaceId,
+        memberRole: result.role,
+        req,
+        reply: res
+    };
 }
 //# sourceMappingURL=context.js.map

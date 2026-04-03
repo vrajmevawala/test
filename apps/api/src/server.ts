@@ -9,6 +9,7 @@ import { botRoute } from './routes/bot.js';
 import { webhookRoute } from './routes/webhook.js';
 import { healthRoute } from './routes/health.js';
 import { publicAnalysisRoute } from './routes/public-analysis.js';
+import { githubWebhookRoute } from './routes/github-webhook.js';
 
 export async function buildServer() {
   const app = Fastify({
@@ -54,6 +55,7 @@ export async function buildServer() {
 
   await app.register(botRoute, { prefix: '/api/bot' });
   await app.register(webhookRoute, { prefix: '/api/webhooks' });
+  await app.register(githubWebhookRoute, { prefix: '/api/webhooks/github' });
   await app.register(healthRoute, { prefix: '/api' });
   await app.register(publicAnalysisRoute, { prefix: '/api' });
 

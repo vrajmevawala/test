@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env.js';
 import { buildServer } from './server.js';
 async function start() {
     const app = await buildServer();
