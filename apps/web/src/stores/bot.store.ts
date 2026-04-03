@@ -26,7 +26,7 @@ interface BotState {
 }
 
 export const useBotStore = create<BotState>((set) => ({
-  conversationId: typeof window !== 'undefined' ? (localStorage.getItem('codeopt_conv_id') || uuidv4()) : uuidv4(),
+  conversationId: typeof window !== 'undefined' ? (localStorage.getItem('codesage_conv_id') || uuidv4()) : uuidv4(),
   messages: [],
   isStreaming: false,
   isOpen: false,
@@ -51,12 +51,12 @@ export const useBotStore = create<BotState>((set) => ({
 
   resetConversation: () => {
     const newId = uuidv4();
-    if (typeof window !== 'undefined') localStorage.setItem('codeopt_conv_id', newId);
+    if (typeof window !== 'undefined') localStorage.setItem('codesage_conv_id', newId);
     set({ conversationId: newId, messages: [], isStreaming: false });
   },
 }));
 
 // Initialize storage
-if (typeof window !== 'undefined' && !localStorage.getItem('codeopt_conv_id')) {
-  localStorage.setItem('codeopt_conv_id', uuidv4());
+if (typeof window !== 'undefined' && !localStorage.getItem('codesage_conv_id')) {
+  localStorage.setItem('codesage_conv_id', uuidv4());
 }

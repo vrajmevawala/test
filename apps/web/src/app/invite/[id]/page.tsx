@@ -52,7 +52,7 @@ export default function InvitePage() {
         </div>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>Join the Team</h1>
         <p style={{ fontSize: 14, color: 'var(--text-mid)', marginBottom: 24 }}>
-          You've been invited to join a collaboration workspace on CodeOptimizer.
+          You've been invited to join a collaboration workspace on CodeSage.
         </p>
 
         {error ? (

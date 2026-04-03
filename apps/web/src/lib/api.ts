@@ -1,7 +1,7 @@
 'use client';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-const WORKSPACE_KEY = 'codeopt_workspace_id';
+const WORKSPACE_KEY = 'codesage_workspace_id';
 
 type ClerkWindow = Window & {
   Clerk?: {
@@ -190,19 +190,20 @@ export const api = {
 
   ensureWorkspace: async (): Promise<string> => {
     const existing = getWorkspaceId();
-    if (existing) {
-      try {
-        // Verify current workspace is still valid for this user
-        await trpcQueryRequest('workspace.current', {});
-        return existing;
-      } catch (e) {
-        // If 403 or not found, clear and proceed to list
-        clearWorkspaceId();
-      }
+    // Resolve against workspace.list only. workspace.current returns HTTP 404 when the
+    // stored id is stale, which spams the browser console even though we recover.
+    const workspaces = await api.trpcQuery<Array<{ id: string }>>('workspace.list');
+    const list = Array.isArray(workspaces) ? workspaces : [];
+
+    if (existing && list.some((w) => w.id === existing)) {
+      return existing;
     }
 
-    const workspaces = await api.trpcQuery<any[]>('workspace.list');
-    const first = Array.isArray(workspaces) ? workspaces[0] : null;
+    if (existing) {
+      clearWorkspaceId();
+    }
+
+    const first = list[0];
     if (!first?.id) {
       throw new Error('No workspace found for current user');
     }

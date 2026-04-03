@@ -31,29 +31,29 @@ export function CodeEditor({
     editorRef.current = editor;
 
     // Define custom theme
-    monaco.editor.defineTheme('codeopt-dark', {
+    monaco.editor.defineTheme('codesage-dark', {
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'comment', foreground: '8b949e' },
+        { token: 'comment', foreground: '8b949e', fontStyle: 'italic' },
         { token: 'keyword', foreground: 'ff7b72' },
         { token: 'string', foreground: 'a5d6ff' },
         { token: 'number', foreground: '79c0ff' },
         { token: 'type', foreground: 'ffa657' },
+        { token: 'class', foreground: 'ffa657' },
         { token: 'function', foreground: 'd2a8ff' },
       ],
       colors: {
         'editor.background': '#0d1117',
         'editor.foreground': '#c9d1d9',
-        'editorLineNumber.foreground': '#484f58',
         'editor.lineHighlightBackground': '#161b22',
-        'editorCursor.foreground': '#f0883e', // Orange cursor
-        'editor.selectionBackground': '#1f6feb44',
-        'editorIndentGuide.background': '#21262d',
+        'editor.selectionBackground': '#3fb95033',
+        'editorCursor.foreground': '#58a6ff',
+        'editorWhitespace.foreground': '#484f58',
+        'editor.border': '#30363d'
       }
     });
-
-    monaco.editor.setTheme('codeopt-dark');
+    monaco.editor.setTheme('codesage-dark');
 
     editor.onMouseDown((e: any) => {
       if (e.target.position) {

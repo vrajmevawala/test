@@ -26,7 +26,7 @@ export function BotWidget() {
               <Bot size={18} className="text-[#0d1117]" />
             </div>
             <div>
-              <div className="text-[13px] font-bold text-[var(--text)] tracking-tight">CodeOpt Assistant</div>
+              <div className="text-[13px] font-bold text-[var(--text)] tracking-tight">CodeSage Assistant</div>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--green)] animate-pulse" />
                 <span className="text-[10px] text-[var(--text-dim)] font-medium">Ready to review</span>

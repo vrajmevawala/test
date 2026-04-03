@@ -1,5 +1,5 @@
 {
-  "name": "codeopt-monorepo",
+  "name": "codesage-monorepo",
   "private": true,
   "scripts": {
     "dev": "turbo dev",

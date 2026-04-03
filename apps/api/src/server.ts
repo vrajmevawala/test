@@ -8,6 +8,7 @@ import { createContext } from './trpc/context.js';
 import { botRoute } from './routes/bot.js';
 import { webhookRoute } from './routes/webhook.js';
 import { healthRoute } from './routes/health.js';
+import { publicAnalysisRoute } from './routes/public-analysis.js';
 
 export async function buildServer() {
   const app = Fastify({
@@ -23,7 +24,11 @@ export async function buildServer() {
 
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, {
-    origin: [process.env.WEB_URL ?? 'http://localhost:3000', 'https://codeopt.dev'],
+    origin: [
+      process.env.WEB_URL ?? 'http://localhost:3000', 
+      'https://codeopt.dev',
+      /^chrome-extension:\/\//, // Allow browser extension
+    ],
     credentials: true,
   });
 
@@ -50,6 +55,7 @@ export async function buildServer() {
   await app.register(botRoute, { prefix: '/api/bot' });
   await app.register(webhookRoute, { prefix: '/api/webhooks' });
   await app.register(healthRoute, { prefix: '/api' });
+  await app.register(publicAnalysisRoute, { prefix: '/api' });
 
   return app;
 }

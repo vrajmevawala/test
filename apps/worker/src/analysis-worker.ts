@@ -140,16 +140,20 @@ export const analysisWorker = new Worker(
           .returning({ id: issues.id, message: issues.message });
 
         const fixable = reportedIssues.filter((i) => i.fixable);
-        for (const fixableIssue of fixable) {
+        const fixPromises = fixable.map(async (fixableIssue) => {
           const issueRow = insertedIssueRows.find((r) => r.message === fixableIssue.message);
-          if (!issueRow) continue;
+          if (!issueRow) return;
 
           const fixResp = await groq.chat.completions.create({
             model: 'llama-3.3-70b-versatile',
             messages: [
               {
                 role: 'user',
-                content: buildFixPrompt(analysis.language, fixableIssue.message, fixableIssue.codeSnippet ?? code.split('\n')[fixableIssue.line - 1]),
+                content: buildFixPrompt(
+                  analysis.language,
+                  fixableIssue.message,
+                  fixableIssue.codeSnippet ?? code.split('\n')[fixableIssue.line - 1],
+                ),
               },
             ],
           });
@@ -162,11 +166,13 @@ export const analysisWorker = new Worker(
               issueId: issueRow.id,
               originalCode: fixableIssue.codeSnippet || code.split('\n')[fixableIssue.line - 1],
               fixedCode,
-              explanation: "AI generated fix.",
+              explanation: 'AI generated fix.',
               confidenceScore: 90,
             });
           }
-        }
+        });
+
+        await Promise.all(fixPromises);
       }
 
       await db

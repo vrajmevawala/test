@@ -21,7 +21,7 @@ export function ChatMessages() {
             <Bot size={20} className="text-[var(--accent)]" />
           </div>
           <div>
-            <div className="text-[13px] font-semibold text-[var(--text)]">CodeOpt Assistant</div>
+            <div className="text-[13px] font-semibold text-[var(--text)]">CodeSage Assistant</div>
             <p className="text-[11px] text-[var(--text-dim)] max-w-[180px]">
               Ask about your analysis, explain issues, or find code patterns.
             </p>

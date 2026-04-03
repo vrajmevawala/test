@@ -19,7 +19,7 @@ interface TopbarProps {
 
 export function Topbar({ children }: TopbarProps) {
   const pathname = usePathname();
-  const title = PAGE_TITLES[Object.keys(PAGE_TITLES).find(key => pathname.startsWith(key)) || ''] || 'CodeOpt';
+  const title = PAGE_TITLES[Object.keys(PAGE_TITLES).find(key => pathname.startsWith(key)) || ''] || 'CodeSage';
 
   return (
     <header style={{

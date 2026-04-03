@@ -12,20 +12,20 @@ interface BadgeProps {
 }
 
 const styles: Record<BadgeVariant, React.CSSProperties> = {
-  green:  { background: 'var(--green-dim)',  color: 'var(--green)',  border: '1px solid rgba(63, 185, 80, 0.25)' },
-  red:    { background: 'var(--red-dim)',    color: 'var(--red)',    border: '1px solid rgba(255, 123, 114, 0.25)' },
-  yellow: { background: 'var(--yellow-dim)', color: 'var(--yellow)', border: '1px solid rgba(227, 179, 65, 0.25)' },
-  info:   { background: 'var(--info-dim)',   color: 'var(--info)',   border: '1px solid rgba(121, 192, 255, 0.25)' },
-  accent: { background: 'var(--accent-dim)', color: 'var(--accent)', border: '1px solid rgba(240, 136, 62, 0.25)' },
+  green:  { background: 'var(--green-dim)',  color: 'var(--green)',  border: '1px solid rgba(63, 185, 80, 0.15)' },
+  red:    { background: 'var(--red-dim)',    color: 'var(--red)',    border: '1px solid rgba(255, 123, 114, 0.15)' },
+  yellow: { background: 'var(--yellow-dim)', color: 'var(--yellow)', border: '1px solid rgba(227, 179, 65, 0.15)' },
+  info:   { background: 'var(--info-dim)',   color: 'var(--info)',   border: '1px solid rgba(121, 192, 255, 0.15)' },
+  accent: { background: 'var(--accent-dim)', color: 'var(--accent)', border: '1px solid rgba(240, 136, 62, 0.15)' },
   dim:    { background: 'var(--surface-2)',  color: 'var(--text-mid)', border: '1px solid var(--border)' },
-  ghost:  { background: 'transparent',      color: 'var(--text-mid)', border: '1px solid var(--border)' },
+  ghost:  { background: 'transparent',      color: 'var(--text-mid)', border: 'none' },
 };
 
 export function Badge({ children, variant = 'dim', size = 'md', className }: BadgeProps) {
   const sizeStyles = {
-    xs: { padding: '1px 6px', fontSize: '9px' },
-    sm: { padding: '2px 8px', fontSize: '10px' },
-    md: { padding: '2px 10px', fontSize: '11px' },
+    xs: { padding: '0 4px', fontSize: '9px' },
+    sm: { padding: '1px 6px', fontSize: '10px' },
+    md: { padding: '1px 8px', fontSize: '11px' },
   }[size];
 
   return (

@@ -3,7 +3,7 @@ import { ClerkProvider } from '@clerk/nextjs';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CodeOpt — AI Code Optimizer',
+  title: 'CodeSage — AI Code Optimizer',
   description: 'AI-powered code analysis, refactoring, and optimization platform for developer teams.',
 };
 

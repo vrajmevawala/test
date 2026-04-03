@@ -8,6 +8,7 @@ interface StatusBarProps {
   issueCount?: number;
   line?: number;
   col?: number;
+  remainingUses?: number | null;
 }
 
 export function StatusBar({ 
@@ -15,7 +16,8 @@ export function StatusBar({
   language, 
   issueCount = 0, 
   line = 1, 
-  col = 1 
+  col = 1,
+  remainingUses,
 }: StatusBarProps) {
   return (
     <div style={{
@@ -41,6 +43,9 @@ export function StatusBar({
         <span>{issueCount} issues</span>
       </div>
       <div style={{ flex: 1 }} />
+      {remainingUses != null ? (
+        <span style={{ opacity: 0.85 }}>Free runs left: {remainingUses}</span>
+      ) : null}
       <span style={{ opacity: 0.8 }}>{file}</span>
       <span>{language}</span>
       <span>UTF-8</span>

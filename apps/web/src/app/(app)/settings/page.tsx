@@ -133,10 +133,10 @@ export default function SettingsPage() {
       </Section>
 
       <Section title="Privacy">
-        <SettingRow label="Store code snippets" desc="Allow CodeOpt to cache snippets for faster repeat analysis">
+        <SettingRow label="Store code snippets" desc="Allow CodeSage to cache snippets for faster repeat analysis">
           <Toggle checked={storeCode} onChange={setStoreCode} />
         </SettingRow>
-        <SettingRow label="Opt in to model improvement" desc="Allow anonymized accepted fixes to improve CodeOpt AI (RLHF)">
+        <SettingRow label="Opt in to model improvement" desc="Allow anonymized accepted fixes to improve CodeSage AI (RLHF)">
           <Toggle checked={rlhf} onChange={setRlhf} />
         </SettingRow>
         <SettingRow label="Delete all data">

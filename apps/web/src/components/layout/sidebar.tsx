@@ -69,7 +69,7 @@ export function Sidebar() {
           <Zap size={14} color="#0d1117" strokeWidth={2.5} fill="#0d1117" />
         </div>
         <Link href="/" style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.02em', textDecoration: 'none' }}>
-          CodeOpt
+          CodeSage
         </Link>
       </div>
 

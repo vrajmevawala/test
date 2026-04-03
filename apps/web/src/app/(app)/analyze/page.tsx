@@ -27,9 +27,15 @@ interface Tab {
 }
 
 const LANGUAGES = [
+  { id: 'typescript', name: 'TypeScript', ext: 'ts' },
+  { id: 'javascript', name: 'JavaScript', ext: 'js' },
   { id: 'python', name: 'Python', ext: 'py' },
+  { id: 'go', name: 'Go', ext: 'go' },
+  { id: 'rust', name: 'Rust', ext: 'rs' },
+  { id: 'java', name: 'Java', ext: 'java' },
   { id: 'cpp', name: 'C++', ext: 'cpp' },
-  { id: 'plaintext', name: 'Plain Text', ext: 'txt' },
+  { id: 'csharp', name: 'C#', ext: 'cs' },
+  { id: 'php', name: 'PHP', ext: 'php' },
 ];
 
 export default function AnalyzePage() {
@@ -38,41 +44,31 @@ export default function AnalyzePage() {
   const [activeIssueId, setActiveIssueId] = useState<string | undefined>();
   const [sidebarWidth, setSidebarWidth] = useState(360);
   const [isResizing, setIsResizing] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const searchParams = useSearchParams();
   const { setOpen: setChatOpen } = useBotStore();
 
-  const handleStartRename = (id: string, name: string) => {
-    setEditingTabId(id);
-    setEditingName(name);
-  };
-
-  const handleFinishRename = () => {
-    if (editingTabId && editingName.trim()) {
-      const name = editingName.trim();
-      const ext = name.split('.').pop()?.toLowerCase();
-      const langId = LANGUAGES.find(l => l.ext === ext)?.id || 'plaintext';
-      const langName = LANGUAGES.find(l => l.ext === ext)?.name || 'Plain Text';
-      
-      setTabs(prev => prev.map(t => t.id === editingTabId ? { 
-        ...t, 
-        name, 
-        language: langName, 
-        internalLanguage: langId 
-      } as any : t));
-    }
-    setEditingTabId(null);
+  const handleRename = (id: string, newName: string) => {
+    if (!newName.trim()) return;
+    const name = newName.trim();
+    const ext = name.split('.').pop()?.toLowerCase();
+    const lang = LANGUAGES.find(l => l.ext === ext);
+    
+    setTabs(prev => prev.map(t => t.id === id ? { 
+      ...t, 
+      name, 
+      language: lang ? lang.name : t.language 
+    } : t));
   };
 
   const handleAddTab = useCallback(() => {
     const newId = uuidv4();
     const newTab: Tab = {
       id: newId,
-      name: 'Untitled',
-      language: 'Plain Text',
+      name: 'Untitled.py',
+      language: 'Python',
       code: '',
       isDraft: true,
     };
@@ -91,11 +87,13 @@ export default function AnalyzePage() {
         const list = await api.trpcQuery<{ items: any[] }>('analysis.list', { page: 1, pageSize: 10 });
         const items = list.items || [];
         
-        const mapToTab = (detail: any): Tab => ({
-          id: detail.id,
-          name: detail.filename,
-          language: detail.language === 'cpp' ? 'C++' : detail.language === 'python' ? 'Python' : 'Plain Text',
-          code: detail.metadata?.sourceCode || '',
+        const mapToTab = (detail: any): Tab => {
+          const lang = LANGUAGES.find(l => l.id === detail.language.toLowerCase());
+          return {
+            id: detail.id,
+            name: detail.filename,
+            language: lang ? lang.name : 'Python', // Fallback to Python instead of Plain Text
+            code: detail.metadata?.sourceCode || '',
           isDraft: false,
           score: Math.round(Number(detail.score ?? 0)),
           status: detail.status,
@@ -112,7 +110,8 @@ export default function AnalyzePage() {
             fix: i.fix,
           })),
           fixedCount: (detail.issues || []).filter((i: any) => i.fixable).length,
-        });
+          };
+        };
 
         const loadedTabs: Tab[] = await Promise.all(items.map(async (item) => {
           const detail = await api.trpcQuery<any>('analysis.byId', { id: item.id });
@@ -160,19 +159,30 @@ export default function AnalyzePage() {
   const handleLanguageChange = (langId: string) => {
     const lang = LANGUAGES.find(l => l.id === langId);
     if (!lang) return;
-    setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, language: lang.name } : t));
+    setTabs(prev => prev.map(t => {
+       if (t.id !== activeTabId) return t;
+       // Also update name extension if possible
+       let newName = t.name;
+       if (t.name.includes('.')) {
+          const base = t.name.split('.').slice(0, -1).join('.');
+          newName = `${base}.${lang.ext}`;
+       } else {
+          newName = `${t.name}.${lang.ext}`;
+       }
+       return { ...t, language: lang.name, name: newName };
+    }));
   };
 
   const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId), [tabs, activeTabId]);
   const activeIssue = useMemo(() => activeTab?.issues?.find(i => i.id === activeIssueId), [activeTab, activeIssueId]);
 
   const handleAnalyze = async () => {
-    if (!activeTab || analyzing) return;
+    const targetTab = activeTab;
+    if (!targetTab || targetTab.status === 'processing') return;
+    const targetTabId = targetTab.id;
 
     try {
-      setAnalyzing(true);
-      const ext = activeTab.name.split('.').pop()?.toLowerCase();
-      const langId = LANGUAGES.find(l => l.ext === ext)?.id || 'plaintext';
+      const langId = LANGUAGES.find(l => l.name === targetTab.language)?.id || 'python';
 
       const { analysisId } = await api.trpcMutation<{ analysisId: string }>('analysis.create', {
         filename: activeTab.name,
@@ -185,7 +195,7 @@ export default function AnalyzePage() {
       await api.trpcMutation('analysis.start', { analysisId });
       
       // Update tab status to processing in-place
-      setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, status: 'processing', isDraft: false } : t));
+      setTabs(prev => prev.map(t => t.id === targetTabId ? { ...t, status: 'processing', isDraft: false } : t));
 
       let result;
       for (let i = 0; i < 20; i++) {
@@ -195,7 +205,7 @@ export default function AnalyzePage() {
       }
 
       if (result) {
-        setTabs(prev => prev.map(t => t.id === activeTabId ? {
+        setTabs(prev => prev.map(t => t.id === targetTabId ? {
           ...t,
           id: result.id,
           isDraft: false,
@@ -215,12 +225,11 @@ export default function AnalyzePage() {
           })),
           fixedCount: (result.issues || []).filter((i: any) => i.fixable).length,
         } : t));
-        setActiveTabId(result.id);
+        if (activeTabId === targetTabId) setActiveTabId(result.id);
       }
     } catch (e) {
       console.error("Analysis failed:", e);
-    } finally {
-      setAnalyzing(false);
+      setTabs(prev => prev.map(t => t.id === targetTabId ? { ...t, status: 'failed' } : t));
     }
   };
 
@@ -269,24 +278,56 @@ export default function AnalyzePage() {
             onSelect={setActiveTabId}
             onClose={handleCloseTab}
             onAdd={handleAddTab}
-            onRename={(id, name) => {
-                setEditingTabId(id);
-                setEditingName(name);
-                handleFinishRename();
-            }}
+            onRename={handleRename}
           />
         </div>
 
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleAnalyze}
-          disabled={analyzing || !activeTab?.code}
-          style={{ background: 'var(--accent)', color: '#000', fontWeight: 600, paddingLeft: 12, paddingRight: 12, borderRadius: 4, height: 24, fontSize: 11, flexShrink: 0 }}
-        >
-          {analyzing ? <Loader2 size={12} className="animate-spin-smooth" /> : <Play size={10} fill="currentColor" />}
-          <span style={{ marginLeft: 6 }}>Analyze</span>
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: '100%', flexShrink: 0 }}>
+          <div style={{ position: 'relative', height: '100%', display: 'flex', alignItems: 'center' }}>
+            <select
+              value={LANGUAGES.find(l => l.name === activeTab?.language)?.id || 'python'}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-dim)',
+                fontSize: 11,
+                fontFamily: 'var(--font-mono)',
+                padding: '0 8px',
+                cursor: 'pointer',
+                outline: 'none',
+                WebkitAppearance: 'none',
+                textAlign: 'right'
+              }}
+            >
+              {LANGUAGES.map(lang => (
+                <option key={lang.id} value={lang.id}>{lang.name}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
+          
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleAnalyze}
+            disabled={activeTab?.status === 'processing' || !activeTab?.code}
+            style={{ 
+              background: 'var(--accent)', 
+              color: '#000', 
+              fontWeight: 600, 
+              paddingLeft: 12, 
+              paddingRight: 12, 
+              borderRadius: 4, 
+              height: 24, 
+              fontSize: 11,
+              border: 'none'
+            }}
+          >
+            {activeTab?.status === 'processing' ? <Loader2 size={12} className="animate-spin-smooth" /> : <Play size={10} fill="currentColor" />}
+            <span style={{ marginLeft: 6 }}>Analyze</span>
+          </Button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>

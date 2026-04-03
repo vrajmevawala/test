@@ -58,7 +58,7 @@ export function AuthCard({ onSuccess }: AuthCardProps) {
             {mode === 'signin' ? 'Welcome back' : 'Create your account'}
           </h2>
           <p style={{ fontSize: 13, color: 'var(--text-mid)' }}>
-            {mode === 'signin' ? 'Sign in to CodeOpt' : 'Start optimizing code for free'}
+            {mode === 'signin' ? 'Sign in to CodeSage' : 'Start optimizing code for free'}
           </p>
         </div>
       </div>

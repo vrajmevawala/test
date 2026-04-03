@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from 'react';
 
 const TERMINAL_LINES = [
-  { text: '$ codeopt analyze ./src --format=json', color: 'var(--text-mid)' },
-  { text: '⚡ CodeOpt v1.0 — AI Code Optimizer', color: 'var(--accent)' },
+  { text: '$ codesage analyze ./src --format=json', color: 'var(--text-mid)' },
+  { text: '⚡ CodeSage v1.0 — AI Code Optimizer', color: 'var(--accent)' },
   { text: '  Scanning 3 files...', color: 'var(--text-mid)' },
   { text: '', color: '' },
   { text: '  utils/dataProcessor.ts', color: 'var(--text)' },
@@ -53,7 +53,7 @@ export function HeroTerminal() {
         <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#febc2e' }} />
         <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#28c840' }} />
         <span style={{ marginLeft: 8, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>
-          terminal — codeopt
+          terminal — codesage
         </span>
       </div>
 

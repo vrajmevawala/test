@@ -150,18 +150,18 @@ export default function TeamPage() {
         </div>
 
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 80px 80px 90px 40px', padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px 80px 100px 40px', padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', gap: 12 }}>
             {['Member', 'Role', 'Analyses', 'Avg Score', 'Status', ''].map((h, i) => (
-              <div key={i} style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{h}</div>
+              <div key={i} style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dim)', textAlign: i > 0 && i < 5 ? 'center' : 'left', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{h}</div>
             ))}
           </div>
-
+ 
           {members.map((m, i) => {
             const displayName = m.userName ?? 'Pending Invite';
             const displayEmail = m.userEmail ?? m.inviteEmail ?? '—';
             const avatarColor = m.role === 'owner' ? 'var(--accent)' : m.role === 'admin' ? 'var(--info)' : 'var(--green)';
             return (
-              <div key={m.memberId} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 80px 80px 90px 40px', padding: '12px 16px', alignItems: 'center', borderBottom: i < members.length - 1 ? '1px solid var(--border)' : 'none', transition: 'background 0.1s' }}>
+              <div key={m.memberId} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px 80px 100px 40px', padding: '12px 16px', alignItems: 'center', borderBottom: i < members.length - 1 ? '1px solid var(--border)' : 'none', gap: 12, transition: 'background 0.1s' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Avatar initials={initials(displayName)} color={avatarColor} size={32} />
                   <div>
@@ -170,10 +170,10 @@ export default function TeamPage() {
                   </div>
                 </div>
 
-                <Badge variant={m.role === 'owner' ? 'accent' : m.role === 'admin' ? 'info' : 'dim'}>{m.role}</Badge>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: m.status === 'invited' ? 'var(--text-dim)' : 'var(--text)' }}>{m.status === 'invited' ? '—' : Number(m.analysesCount)}</div>
-                <div>{m.status === 'invited' ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-dim)' }}>—</span> : <ScoreRing score={Math.round(Number(m.avgScore ?? 0))} size={32} strokeWidth={3} />}</div>
-                <Badge variant={m.status === 'active' ? 'green' : m.status === 'invited' ? 'yellow' : 'red'}>{m.status}</Badge>
+                <div style={{ display: 'flex', justifyContent: 'center' }}><Badge variant={m.role === 'owner' ? 'accent' : m.role === 'admin' ? 'info' : 'dim'}>{m.role}</Badge></div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, textAlign: 'center', color: m.status === 'invited' ? 'var(--text-dim)' : 'var(--text)' }}>{m.status === 'invited' ? '—' : Number(m.analysesCount)}</div>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>{m.status === 'invited' ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-dim)' }}>—</span> : <ScoreRing score={Math.round(Number(m.avgScore ?? 0))} size={32} strokeWidth={3} />}</div>
+                <div style={{ display: 'flex', justifyContent: 'center' }}><Badge variant={m.status === 'active' ? 'green' : m.status === 'invited' ? 'yellow' : 'red'}>{m.status}</Badge></div>
                 <Button 
                   variant="ghost" 
                   size="sm" 

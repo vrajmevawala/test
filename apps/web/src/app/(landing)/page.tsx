@@ -3,7 +3,7 @@ import React from 'react';
 import { Show } from '@clerk/nextjs';
 import Link from 'next/link';
 import { HeroTerminal } from '@/components/landing/hero-terminal';
-import { FeatureGrid } from '@/components/landing/feature-grid';
+import { FeatureCarousel } from '@/components/landing/feature-carousel';
 import { PricingGrid } from '@/components/landing/pricing-grid';
 import { StatusBar } from '@/components/layout/status-bar';
 import { Zap, ArrowRight } from 'lucide-react';
@@ -35,11 +35,12 @@ export default function LandingPage() {
           <div style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Zap size={13} color="#0d1117" fill="#0d1117" />
           </div>
-          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>CodeOpt</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>CodeSage</span>
         </div>
 
         {/* Nav */}
         <nav style={{ display: 'flex', gap: 24, flex: 1 }}>
+          <Link href="/playground" style={{ fontSize: 13, color: 'var(--text-mid)', transition: 'color 0.15s', textDecoration: 'none' }}>Playground</Link>
           {NAV_LINKS.map(l => (
             <a key={l} href="#" style={{ fontSize: 13, color: 'var(--text-mid)', transition: 'color 0.15s' }}>{l}</a>
           ))}
@@ -97,7 +98,7 @@ export default function LandingPage() {
           </h1>
 
           <p style={{ fontSize: 16, color: 'var(--text-mid)', lineHeight: 1.6, marginBottom: 32 }}>
-            CodeOpt catches what humans miss — O(n²) loops, SQL injections, exposed secrets — and fixes them automatically with AI-generated, diff-previewed patches.
+            CodeSage catches what humans miss — O(n²) loops, SQL injections, exposed secrets — and fixes them automatically with AI-generated, diff-previewed patches.
           </p>
 
           <div style={{ display: 'flex', gap: 12, marginBottom: 40 }}>
@@ -110,6 +111,18 @@ export default function LandingPage() {
               }}
             >
               Start Free — No credit card <ArrowRight size={15} />
+            </Link>
+            <Link
+              href="/playground"
+              style={{
+                height: 42, padding: '0 20px', borderRadius: 'var(--radius-md)',
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                color: 'var(--text)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'var(--font-ui)', display: 'flex', alignItems: 'center', gap: 8,
+                textDecoration: 'none'
+              }}
+            >
+              Try Playground
             </Link>
             <button
               style={{
@@ -142,7 +155,7 @@ export default function LandingPage() {
           <h2 style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>Everything you need to ship better code</h2>
           <p style={{ fontSize: 14, color: 'var(--text-mid)' }}>Six powerful modules. One platform.</p>
         </div>
-        <FeatureGrid />
+        <FeatureCarousel />
       </div>
 
       <div style={{ padding: '48px 80px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>

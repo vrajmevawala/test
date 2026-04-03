@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, uuid, text, timestamp, integer } from 'drizzle-orm/pg-core';
+import { pgEnum, pgTable, uuid, text, timestamp, integer, index } from 'drizzle-orm/pg-core';
 import { issues } from './issues.js';
 import { users } from './users.js';
 
@@ -17,7 +17,9 @@ export const fixes = pgTable('fixes', {
   userRating: integer('user_rating'),
   appliedAt: timestamp('applied_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => ({
+  issueIdIdx: index('idx_fixes_issue_id').on(table.issueId),
+}));
 
 export type Fix = typeof fixes.$inferSelect;
 export type NewFix = typeof fixes.$inferInsert;
