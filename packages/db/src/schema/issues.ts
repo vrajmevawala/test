@@ -3,7 +3,7 @@ import { analyses } from './analyses.js';
 
 export const severityEnum = pgEnum('severity', ['error', 'warning', 'info']);
 export const issueCategoryEnum = pgEnum('issue_category', [
-  'security', 'performance', 'complexity', 'style', 'best-practice', 'bug',
+  'security', 'performance', 'complexity', 'style', 'best-practice', 'bug', 'memory',
 ]);
 
 export const issues = pgTable('issues', {
@@ -22,6 +22,7 @@ export const issues = pgTable('issues', {
   fixApplied: boolean('fix_applied').notNull().default(false),
   fixAppliedAt: timestamp('fix_applied_at', { withTimezone: true }),
   fixAppliedBy: uuid('fix_applied_by'),
+  dimension: text('dimension'),
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });

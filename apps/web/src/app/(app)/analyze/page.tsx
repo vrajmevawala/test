@@ -26,6 +26,7 @@ interface Tab {
   cognitiveComplexity?: number;
   timeComplexity?: string;
   complexityScore?: number;
+  theoreticalOptimal?: string;
 }
 
 const LANGUAGES = [
@@ -103,13 +104,16 @@ export default function AnalyzePage() {
           cognitiveComplexity: detail.cognitiveComplexity,
           timeComplexity: detail.metadata?.timeComplexity,
           complexityScore: detail.metadata?.complexityScore,
+          theoreticalOptimal: detail.metadata?.theoreticalOptimal,
           issues: (detail.issues || []).map((i: any) => ({
             id: i.id,
             line: i.line,
             column: i.column || i.col || 0,
             severity: i.severity,
+            category: i.category,
             message: i.message,
             rule: i.rule,
+            dimension: i.dimension,
             fixable: i.fixable,
             fix: i.fix,
             metadata: i.metadata,
@@ -222,7 +226,7 @@ export default function AnalyzePage() {
       setTabs(prev => prev.map(t => t.id === targetTabId ? { ...t, status: 'processing', isDraft: false } : t));
 
       let result;
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 60; i++) {
         await new Promise(r => setTimeout(r, 2000));
         result = await api.trpcQuery<any>('analysis.byId', { id: analysisId });
         if (result.status === 'complete' || result.status === 'failed') break;
@@ -239,13 +243,16 @@ export default function AnalyzePage() {
           cognitiveComplexity: result.cognitiveComplexity,
           timeComplexity: result.metadata?.timeComplexity,
           complexityScore: result.metadata?.complexityScore,
+          theoreticalOptimal: result.metadata?.theoreticalOptimal,
           issues: (result.issues || []).map((i: any) => ({
             id: i.id,
             line: i.line,
             column: i.column || i.col || 0,
             severity: i.severity,
+            category: i.category,
             message: i.message,
             rule: i.rule,
+            dimension: i.dimension,
             fixable: i.fixable,
             fix: i.fix,
             metadata: i.metadata,

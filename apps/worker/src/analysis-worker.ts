@@ -24,8 +24,9 @@ type ReportedIssue = {
   line: number;
   col?: number;
   severity: 'error' | 'warning' | 'info';
-  category: 'security' | 'performance' | 'complexity' | 'style' | 'best-practice' | 'bug';
+  category: 'security' | 'performance' | 'complexity' | 'style' | 'best-practice' | 'bug' | 'memory';
   rule: string;
+  dimension?: string;
   message: string;
   suggestion?: string;
   codeSnippet?: string;
@@ -40,7 +41,7 @@ const COMPLETE_ANALYSIS_TOOL = {
   type: 'function' as const,
   function: {
     name: 'complete_analysis',
-    description: 'Report all analysis findings including issues and overall code metrics',
+    description: 'Report ALL analysis findings across all 12 dimensions, including issues and overall code metrics. Every issue MUST include metricsImpact.',
     parameters: {
       type: 'object',
       properties: {
@@ -49,33 +50,38 @@ const COMPLETE_ANALYSIS_TOOL = {
           items: {
             type: 'object',
             properties: {
-              line: { type: 'number' },
-              col: { type: 'number' },
+              line: { type: 'number', description: 'Exact line number of the issue' },
+              col: { type: 'number', description: 'Column number (0 if unknown)' },
               severity: { type: 'string', enum: ['error', 'warning', 'info'] },
               category: {
                 type: 'string',
-                enum: ['security', 'performance', 'complexity', 'style', 'best-practice', 'bug'],
+                enum: ['security', 'performance', 'complexity', 'style', 'best-practice', 'bug', 'memory'],
               },
-              rule: { type: 'string' },
-              message: { type: 'string' },
-              suggestion: { type: 'string' },
-              codeSnippet: { type: 'string' },
-              fixable: { type: 'boolean' },
+              rule: { type: 'string', description: 'Machine-readable rule ID (e.g., "pass-by-value-large-struct", "quadratic-loop")' },
+              message: { type: 'string', description: 'Human-readable explanation of the issue' },
+              suggestion: { type: 'string', description: 'Recommended fix with concrete code example' },
+              codeSnippet: { type: 'string', description: 'The offending code from the source' },
+              fixable: { type: 'boolean', description: 'Whether this issue can be auto-fixed' },
+              dimension: { type: 'string', description: 'Which analysis dimension (D1–D12) this belongs to' },
               metricsImpact: {
                 type: 'object',
+                description: 'MANDATORY: BEFORE → AFTER complexity comparison for BOTH time and space',
                 properties: {
-                  timeComplexity: { type: 'string' },
-                  spaceComplexity: { type: 'string' },
-                }
+                  timeComplexity: { type: 'string', description: 'e.g., "O(n²) → O(n log n)" or "unchanged"' },
+                  spaceComplexity: { type: 'string', description: 'e.g., "O(n) → O(1)" or "unchanged"' },
+                },
+                required: ['timeComplexity', 'spaceComplexity'],
               },
             },
-            required: ['line', 'severity', 'category', 'rule', 'message'],
+            required: ['line', 'severity', 'category', 'rule', 'message', 'metricsImpact'],
           }
         },
-        overallTimeComplexity: { type: 'string', description: 'Overall Big O time complexity (e.g., O(n))' },
-        overallComplexityScore: { type: 'number', description: 'Score from 0-100 indicating how optimal the complexity is' },
+        overallTimeComplexity: { type: 'string', description: 'Worst-case Big-O time complexity of the dominant path (e.g., O(n²))' },
+        overallSpaceComplexity: { type: 'string', description: 'Auxiliary space complexity excluding input (e.g., O(n))' },
+        overallComplexityScore: { type: 'number', description: 'Score from 0–100 indicating how close to optimal the code is (100 = optimal)' },
+        theoreticalOptimal: { type: 'string', description: 'The best possible complexity for this problem class (e.g., O(n log n) for comparison sort)' },
       },
-      required: ['issues', 'overallTimeComplexity', 'overallComplexityScore'],
+      required: ['issues', 'overallTimeComplexity', 'overallSpaceComplexity', 'overallComplexityScore', 'theoreticalOptimal'],
     },
   },
 };
@@ -126,7 +132,9 @@ export const analysisWorker = new Worker(
       const reportedIssues: ReportedIssue[] = args.issues || [];
       const overallComplexity = {
         timeComplexity: args.overallTimeComplexity,
+        spaceComplexity: args.overallSpaceComplexity,
         complexityScore: args.overallComplexityScore,
+        theoreticalOptimal: args.theoreticalOptimal,
       };
 
       const lineCount = code.split('\n').length;
@@ -155,6 +163,7 @@ export const analysisWorker = new Worker(
             rule: issue.rule,
             message: issue.message,
             suggestion: issue.suggestion,
+            dimension: issue.dimension || null,
             codeSnippet: issue.codeSnippet || code.split('\n')[(snapped?.line ?? issue.line) - 1] || '',
             fixable: issue.fixable ?? false,
             metadata: (issue.metricsImpact?.timeComplexity || issue.metricsImpact?.spaceComplexity) 
@@ -215,7 +224,9 @@ export const analysisWorker = new Worker(
           metadata: { 
             ...((analysis.metadata as any) || {}), 
             timeComplexity: overallComplexity?.timeComplexity || null, 
-            complexityScore: overallComplexity?.complexityScore || null 
+            spaceComplexity: overallComplexity?.spaceComplexity || null,
+            complexityScore: overallComplexity?.complexityScore || null,
+            theoreticalOptimal: overallComplexity?.theoreticalOptimal || null,
           },
           tokensUsed: response.usage?.total_tokens || 0,
           completedAt: new Date(),
