@@ -1,3 +1,4 @@
+import './env.js';
 import { analysisWorker } from './analysis-worker.js';
 analysisWorker.on('ready', () => {
     console.log('Analysis worker ready');

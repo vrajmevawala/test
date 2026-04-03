@@ -1,5 +1,5 @@
 export declare const analysisStatusEnum: import("drizzle-orm/pg-core").PgEnum<["pending", "processing", "complete", "failed", "cancelled"]>;
-export declare const languageEnum: import("drizzle-orm/pg-core").PgEnum<["typescript", "javascript", "python", "go", "rust", "java", "cpp", "csharp", "ruby", "php"]>;
+export declare const languageEnum: import("drizzle-orm/pg-core").PgEnum<["typescript", "javascript", "python", "go", "rust", "java", "cpp", "csharp", "ruby", "php", "plaintext"]>;
 export declare const analyses: import("drizzle-orm/pg-core").PgTableWithColumns<{
     name: "analyses";
     schema: undefined;
@@ -77,14 +77,14 @@ export declare const analyses: import("drizzle-orm/pg-core").PgTableWithColumns<
             tableName: "analyses";
             dataType: "string";
             columnType: "PgEnumColumn";
-            data: "typescript" | "javascript" | "python" | "go" | "rust" | "java" | "cpp" | "csharp" | "ruby" | "php";
+            data: "typescript" | "javascript" | "python" | "go" | "rust" | "java" | "cpp" | "csharp" | "ruby" | "php" | "plaintext";
             driverParam: string;
             notNull: true;
             hasDefault: false;
             isPrimaryKey: false;
             isAutoincrement: false;
             hasRuntimeDefault: false;
-            enumValues: ["typescript", "javascript", "python", "go", "rust", "java", "cpp", "csharp", "ruby", "php"];
+            enumValues: ["typescript", "javascript", "python", "go", "rust", "java", "cpp", "csharp", "ruby", "php", "plaintext"];
             baseColumn: never;
             identity: undefined;
             generated: undefined;

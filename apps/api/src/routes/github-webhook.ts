@@ -47,19 +47,19 @@ const SCORE_CODE_TOOL = {
   type: 'function' as const,
   function: {
     name: 'score_code',
-    description: 'Score the code on 6 dimensions. Call EXACTLY ONCE. Be brutally honest.',
+    description: 'Score the code on 6 dimensions. Call EXACTLY ONCE. Be brutally honest. Total is out of 100.',
     parameters: {
       type: 'object',
       properties: {
-        correctness: { type: 'number', description: '0-10: Does it produce correct output?' },
-        timeComplexity: { type: 'number', description: '0-20: Is the algorithm optimal? O(n²) when O(n) exists = 2-5.' },
-        spaceComplexity: { type: 'number', description: '0-10: Unnecessary copies, wasted memory?' },
-        codePractices: { type: 'number', description: '0-15: Naming, idioms, anti-patterns?' },
-        scalability: { type: 'number', description: '0-15: Works with 10M inputs?' },
-        optimizationAwareness: { type: 'number', description: '0-15: Does author understand performance?' },
+        correctness: { type: 'number', description: '0-10: Does it produce correct output for all inputs including edge cases?' },
+        performance: { type: 'number', description: '0-20: Is the algorithm optimal? O(n²) when O(n) exists = 2-5. Includes time complexity, cache locality, unnecessary recomputation.' },
+        codeQuality: { type: 'number', description: '0-20: Naming, idioms, anti-patterns, type safety, readability, DRY principle.' },
+        architecture: { type: 'number', description: '0-20: SRP, separation of concerns, modularity, testability, coupling. For React: component composition, hooks discipline, state management.' },
+        optimization: { type: 'number', description: '0-20: Memory efficiency, pass-by-reference awareness, unnecessary copies, memoization, React re-render prevention.' },
+        productionReadiness: { type: 'number', description: '0-10: Error handling, security, edge cases, logging, cleanup, graceful degradation.' },
         summary: { type: 'string', description: 'One-line verdict of the code quality' },
       },
-      required: ['correctness', 'timeComplexity', 'spaceComplexity', 'codePractices', 'scalability', 'optimizationAwareness', 'summary'],
+      required: ['correctness', 'performance', 'codeQuality', 'architecture', 'optimization', 'productionReadiness', 'summary'],
     },
   },
 };
@@ -93,11 +93,11 @@ interface FileIssue {
 
 interface ScoreBreakdown {
   correctness: number;
-  timeComplexity: number;
-  spaceComplexity: number;
-  codePractices: number;
-  scalability: number;
-  optimizationAwareness: number;
+  performance: number;
+  codeQuality: number;
+  architecture: number;
+  optimization: number;
+  productionReadiness: number;
   summary: string;
   total: number;
 }
@@ -127,7 +127,7 @@ async function analyzeFile(filename: string, content: string): Promise<{
   });
 
   const toolCalls = response.choices[0]?.message?.tool_calls || [];
-  
+
   // Extract issues
   const rawIssues = toolCalls
     .filter((tc) => tc.function.name === 'report_issue')
@@ -151,18 +151,17 @@ async function analyzeFile(filename: string, content: string): Promise<{
 
   if (scoreCall) {
     const s = JSON.parse(scoreCall.function.arguments);
-    const rawTotal = (s.correctness || 0) + (s.timeComplexity || 0) + (s.spaceComplexity || 0) +
-                     (s.codePractices || 0) + (s.scalability || 0) + (s.optimizationAwareness || 0);
-    score = Math.round((rawTotal / 85) * 100); // Scale from /85 to /100
-    score = Math.max(0, Math.min(100, score));
-    
+    const rawTotal = (s.correctness || 0) + (s.performance || 0) + (s.codeQuality || 0) +
+      (s.architecture || 0) + (s.optimization || 0) + (s.productionReadiness || 0);
+    score = Math.max(0, Math.min(100, rawTotal)); // Already out of 100
+
     scoreBreakdown = {
       correctness: s.correctness || 0,
-      timeComplexity: s.timeComplexity || 0,
-      spaceComplexity: s.spaceComplexity || 0,
-      codePractices: s.codePractices || 0,
-      scalability: s.scalability || 0,
-      optimizationAwareness: s.optimizationAwareness || 0,
+      performance: s.performance || 0,
+      codeQuality: s.codeQuality || 0,
+      architecture: s.architecture || 0,
+      optimization: s.optimization || 0,
+      productionReadiness: s.productionReadiness || 0,
       summary: s.summary || '',
       total: rawTotal,
     };
@@ -180,16 +179,17 @@ async function analyzeFile(filename: string, content: string): Promise<{
 // ---------- Build the PR comment ----------
 
 function buildPRComment(
-  results: Array<{ 
-    file: string; 
-    score: number; 
+  results: Array<{
+    file: string;
+    score: number;
     scoreBreakdown: ScoreBreakdown | null;
-    issues: FileIssue[]; 
-    cyclomaticComplexity: number | null; 
-    cognitiveComplexity: number | null 
+    issues: FileIssue[];
+    cyclomaticComplexity: number | null;
+    cognitiveComplexity: number | null
   }>,
   overallScore: number,
   passed: boolean,
+  headSha: string,
 ): string {
   const statusIcon = passed ? '✅' : '❌';
   const allIssues = results.flatMap((r) => r.issues);
@@ -213,7 +213,7 @@ function buildPRComment(
   // Group issues by file
   for (const result of results) {
     comment += `### 📄 \`${result.file}\` — Score: ${result.score}/100\n`;
-    
+
     // Add Score Breakdown Table
     if (result.scoreBreakdown) {
       const b = result.scoreBreakdown;
@@ -221,11 +221,11 @@ function buildPRComment(
       comment += `| Dimension | Score | Max |\n`;
       comment += `|---|---|---|\n`;
       comment += `| Correctness | ${b.correctness} | 10 |\n`;
-      comment += `| Time Complexity | ${b.timeComplexity} | 20 |\n`;
-      comment += `| Space Complexity | ${b.spaceComplexity} | 10 |\n`;
-      comment += `| Code Practices | ${b.codePractices} | 15 |\n`;
-      comment += `| Scalability | ${b.scalability} | 15 |\n`;
-      comment += `| Optimization | ${b.optimizationAwareness} | 15 |\n`;
+      comment += `| Performance | ${b.performance} | 20 |\n`;
+      comment += `| Code Quality | ${b.codeQuality} | 20 |\n`;
+      comment += `| Architecture | ${b.architecture} | 20 |\n`;
+      comment += `| Optimization | ${b.optimization} | 20 |\n`;
+      comment += `| Production Readiness | ${b.productionReadiness} | 10 |\n`;
       comment += `| **Summary** | colspan=2 | *${b.summary}* |\n\n`;
     }
 
@@ -252,10 +252,23 @@ function buildPRComment(
   }
 
   comment += `---\n`;
-  comment += `*Analyzed by [CodeSage](https://codesage.dev) · AI-Powered Code Review*\n`;
+  comment += `*Analyzed by [CodeSage](https://codesage.dev) · AI-Powered Code Review · Commit: ${headSha.slice(0, 7)}*\n`;
 
   return comment;
 }
+
+// ---------- Deduplication ----------
+
+const processingPRs = new Set<string>();
+
+function buildDedupeKey(owner: string, repo: string, prNumber: number, sha: string): string {
+  return `${owner}/${repo}#${prNumber}@${sha}`;
+}
+
+// Auto-clean stale entries after 10 minutes
+setInterval(() => {
+  processingPRs.clear();
+}, 10 * 60 * 1000);
 
 // ---------- Handle PR event ----------
 
@@ -270,11 +283,37 @@ async function handlePullRequest(payload: any) {
   const repo = repository.name;
   const prNumber = pr.number;
   const headSha = pr.head.sha;
+  const headOwner = pr.head?.repo?.owner?.login || owner;
+  const headRepo = pr.head?.repo?.name || repo;
+
+  // Deduplicate: skip if we're already processing this exact PR + SHA
+  const dedupeKey = buildDedupeKey(owner, repo, prNumber, headSha);
+  if (processingPRs.has(dedupeKey)) {
+    console.log(`[GitHub] Skipping duplicate PR #${prNumber} on ${owner}/${repo} (sha: ${headSha})`);
+    return;
+  }
+  processingPRs.add(dedupeKey);
 
   console.log(`[GitHub] Analyzing PR #${prNumber} on ${owner}/${repo}`);
 
   try {
     const octokit = await createInstallationOctokit(installationId);
+
+    // 0. Find existing bot comment for upsert (prevents duplicate comments across instances)
+    const { data: existingComments } = await octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    });
+    const existingBotComment = existingComments.find(
+      (c: any) => c.user?.type === 'Bot' && c.body?.includes('CodeSage Analysis'),
+    );
+    // If bot already commented on this EXACT SHA, skip entirely
+    if (existingBotComment?.body?.includes(headSha.slice(0, 7))) {
+      console.log(`[GitHub] Bot already commented on PR #${prNumber} for sha ${headSha}, skipping`);
+      return;
+    }
 
     // 1. Create a pending check run
     const { data: checkRun } = await octokit.rest.checks.create({
@@ -334,8 +373,8 @@ async function handlePullRequest(payload: any) {
         batch.map(async (file: any) => {
           try {
             const { data: contentData } = await octokit.rest.repos.getContent({
-              owner,
-              repo,
+              owner: headOwner,
+              repo: headRepo,
               path: file.filename,
               ref: headSha,
             });
@@ -372,14 +411,25 @@ async function handlePullRequest(payload: any) {
 
     const passed = overallScore >= SCORE_THRESHOLD;
 
-    // 6. Post PR comment
-    const comment = buildPRComment(results, overallScore, passed);
-    await octokit.rest.issues.createComment({
-      owner,
-      repo,
-      issue_number: prNumber,
-      body: comment,
-    });
+    // 6. Post or update PR comment (upsert to prevent duplicates)
+    const commentBody = buildPRComment(results, overallScore, passed, headSha);
+    if (existingBotComment) {
+      // Update existing comment instead of creating a new one
+      await octokit.rest.issues.updateComment({
+        owner,
+        repo,
+        comment_id: existingBotComment.id,
+        body: commentBody,
+      });
+      console.log(`[GitHub] Updated existing comment on PR #${prNumber}`);
+    } else {
+      await octokit.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: prNumber,
+        body: commentBody,
+      });
+    }
 
     // 7. Update check run
     const totalIssues = results.flatMap((r) => r.issues).length;

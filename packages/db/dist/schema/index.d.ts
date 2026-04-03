@@ -9,3 +9,4 @@ export * from './audit-logs.js';
 export * from './conversations.js';
 export * from './credits.js';
 export * from './subscriptions.js';
+export * from './github-installations.js';

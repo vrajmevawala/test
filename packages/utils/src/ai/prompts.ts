@@ -237,15 +237,203 @@ export const JAVA_EXPERT_RULES = `
 `.trim();
 
 export const TYPESCRIPT_EXPERT_RULES = `
-[STRICT TYPESCRIPT / JAVASCRIPT (ESNext) / REACT RULES]
-- IMMUTABILITY: Prefer const, Object.freeze(), ReadonlyArray<T>, Readonly<T>. Flag let where const suffices. Use "as const" for literal types.
-- PASS-BY-REFERENCE AWARENESS: Objects/arrays are reference types — flag unintentional mutation of shared state. Flag unnecessary spread copies ({...obj}) when a reference suffices. Flag deep clones (structuredClone, JSON parse/stringify) that are avoidable.
-- ASYNC PATTERNS: Use Promise.all / Promise.allSettled for concurrent I/O instead of sequential await in loops. Flag callback hell. Use AbortController for cancellable operations.
-- DATA STRUCTURES: Use Map/Set over plain objects for dynamic key collections. Use TypedArrays for numeric buffers.
-- MEMORY / NEXTJS / REACT: Flag closures that capture large scopes unnecessarily (memory leaks). Flag missing cleanup in useEffect / event listeners. Strongly penalize inline functions/objects creating massive rerenders.
-- DOM PERFORMANCE: Penalize heavy computations (like nested .filter().map().sort() chains) directly inside the render body.
-- SECURITY: Flag dangerouslySetInnerHTML and unprotected href targets.
-- AVOID: any type (use unknown + type guards), == (use ===), eval(), delete operator on hot objects (deoptimises V8 hidden classes).
+[STRICT TYPESCRIPT / JAVASCRIPT (ESNext) / REACT / NEXT.JS RULES]
+═══════════════════════════════════════════════════════════════════════════════
+ THIS IS THE STRICTEST POSSIBLE REACT & TS ANALYSIS. ZERO TOLERANCE FOR
+ PERFORMANCE ANTI-PATTERNS. EVERY VIOLATION BELOW IS A MANDATORY REPORT.
+═══════════════════════════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────────────────────
+ R1 — REACT RE-RENDERS (SEVERITY: ERROR)
+────────────────────────────────────────────────────────────────────────────
+- INLINE OBJECTS IN JSX PROPS: Strictly penalise ANY inline object literal passed as a JSX prop.
+  Examples that MUST be flagged as ERROR:
+    • style={{ margin: 10 }}          → Extract to a const or useMemo.
+    • options={{ sort: true }}         → Extract to a stable reference outside render.
+    • data={{ id: 1, name: "x" }}     → Hoist to module-level const or useMemo.
+  WHY: Every render creates a new object reference → triggers child re-render even when values haven't changed.
+
+- INLINE FUNCTIONS IN JSX PROPS: Strictly penalise ANY inline arrow function or .bind() in JSX.
+  Examples that MUST be flagged as ERROR:
+    • onClick={() => handleClick(id)} → Use useCallback or extract handler.
+    • onChange={e => setValue(e.target.value)} → Wrap in useCallback.
+    • onSubmit={handleSubmit.bind(this)} → Use useCallback, not .bind().
+  WHY: New function reference on every render → breaks React.memo / PureComponent optimisations.
+
+- MISSING useMemo: Flag any EXPENSIVE COMPUTATION (O(n) or worse) that runs on every render without useMemo.
+  Examples: sorting arrays, filtering large lists, computing derived data, aggregating totals.
+  If computation cost > O(1), it MUST be wrapped in useMemo with correct dependency array.
+
+- MISSING useCallback: Flag any function passed as a prop to a child component that is NOT wrapped in useCallback.
+  Exception: trivial inline handlers on native DOM elements with no memoised children.
+
+- MISSING React.memo: Flag child components that receive stable props but re-render on every parent render.
+  If a component is pure (output depends solely on props), it SHOULD be wrapped in React.memo.
+
+- CONTEXT MISUSE: Flag React Context providers whose value is a new object/array on every render.
+  MUST use useMemo for context value objects.
+
+────────────────────────────────────────────────────────────────────────────
+ R2 — STATE MUTATION (SEVERITY: ERROR — IMMEDIATE FAIL)
+────────────────────────────────────────────────────────────────────────────
+- DIRECT ARRAY MUTATION: Flag as ERROR any of the following on React state:
+    • array.push(), array.pop(), array.shift(), array.unshift(), array.splice()
+    • array.sort() or array.reverse() without spreading first
+  REQUIRED PATTERN: [...array, newItem], array.filter(), array.map(), or structuredClone.
+
+- DIRECT OBJECT MUTATION: Flag as ERROR any of the following on React state:
+    • obj.key = value (direct property assignment on state object)
+    • delete obj.key
+  REQUIRED PATTERN: { ...obj, key: newValue } or Object.fromEntries().
+
+- NESTED STATE MUTATION: Flag as ERROR mutating nested objects/arrays in state:
+    • state.nested.array.push(x) → MUST use immutable update: { ...state, nested: { ...state.nested, array: [...state.nested.array, x] } }
+  For deep updates, suggest Immer (produce()) if already in dependencies.
+
+- useState SETTER MISUSE: Flag using stale state in setter:
+    • setCount(count + 1) in async/timeout → MUST use functional form: setCount(prev => prev + 1)
+
+────────────────────────────────────────────────────────────────────────────
+ R3 — MEMORY LEAKS (SEVERITY: ERROR — IMMEDIATE FAIL)
+────────────────────────────────────────────────────────────────────────────
+- useEffect CLEANUP MANDATORY: EVERY useEffect that sets up ANY of the following MUST return a cleanup function:
+    • addEventListener / removeEventListener
+    • setInterval / setTimeout → MUST clearInterval / clearTimeout
+    • WebSocket connections → MUST call ws.close()
+    • AbortController → MUST call controller.abort()
+    • Subscriptions (e.g. RxJS, Firebase, Supabase realtime) → MUST unsubscribe
+    • IntersectionObserver / MutationObserver / ResizeObserver → MUST disconnect()
+  If cleanup is MISSING → severity: ERROR, immediate fail. No exceptions.
+
+- STALE CLOSURE DETECTION: Flag useEffects or callbacks that reference state/props without including them in the dependency array. This leads to stale data reads.
+
+- ASYNC useEffect LEAKS: Flag async operations in useEffect that update state after unmount:
+    • MUST use an isMounted/cancelled flag or AbortController.
+    • Pattern: let cancelled = false; ... return () => { cancelled = true; };
+    • fetch() inside useEffect without AbortSignal → ERROR.
+
+- REF LEAKS: Flag storing DOM refs or large objects in useRef without cleaning them up on unmount.
+
+────────────────────────────────────────────────────────────────────────────
+ R4 — ASYNC / AWAIT PATTERNS (SEVERITY: WARNING → ERROR)
+────────────────────────────────────────────────────────────────────────────
+- SEQUENTIAL AWAITS: Flag sequential await statements that are independent and could run in parallel:
+    • const a = await fetchA(); const b = await fetchB();
+    → MUST be: const [a, b] = await Promise.all([fetchA(), fetchB()]);
+  Severity: WARNING if 2 sequential, ERROR if 3+.
+
+- UNHANDLED PROMISES: Flag any async function call whose returned promise is not awaited or .catch()'d.
+    • fetchData();  (no await, no .then/.catch) → ERROR.
+
+- AWAIT IN LOOPS: Flag await inside for/while/forEach loops:
+    • for (const id of ids) { await fetch(id); } → Use Promise.all(ids.map(id => fetch(id)))
+  Severity: ERROR — this is O(n) sequential network roundtrips vs O(1) parallel.
+
+- MISSING ERROR BOUNDARIES: Flag async operations without try/catch or .catch().
+  React components using async data fetching SHOULD have an ErrorBoundary wrapper.
+
+- RACE CONDITIONS: Flag setState calls after awaited operations without checking component mount status.
+
+────────────────────────────────────────────────────────────────────────────
+ R5 — DOM & RENDER PERFORMANCE (SEVERITY: WARNING → ERROR)
+────────────────────────────────────────────────────────────────────────────
+- HEAVY COMPUTATION IN RENDER: Flag any computation with O(n) or worse complexity written directly inside
+  the component body (outside useMemo). This freezes the main thread on EVERY render:
+    • data.filter(...).map(...).sort(...)          → Wrap in useMemo.
+    • array.reduce((acc, x) => ..., [])            → Wrap in useMemo.
+    • Object.keys(obj).filter(...).map(...)        → Wrap in useMemo.
+  Severity: ERROR if O(n²)+, WARNING if O(n) on potentially large dataset.
+
+- RENDER-BLOCKING OPERATIONS: Flag synchronous heavy work in render path:
+    • JSON.parse() / JSON.stringify() of large objects in render body → ERROR.
+    • RegExp compilation (new RegExp()) on every render → Extract to module scope or useMemo.
+
+- UNNECESSARY RE-RENDERS: Flag components that pass new array/object references as props without memoisation:
+    • <Child items={data.filter(x => x.active)} />  → useMemo the filtered array.
+
+- LARGE LIST RENDERING: Flag rendering 100+ items without virtualisation.
+  Suggest react-window or react-virtuoso if already in deps, or manual windowing.
+
+- KEY PROP MISUSE: Flag using array index as key in lists that can be reordered, filtered, or mutated.
+  MUST use a stable unique identifier. Using index → ERROR if list is dynamic.
+
+────────────────────────────────────────────────────────────────────────────
+ R6 — PROPS & TYPING (SEVERITY: WARNING → ERROR)
+────────────────────────────────────────────────────────────────────────────
+- ZERO TOLERANCE FOR \`any\`: Flag EVERY occurrence of the \`any\` type as ERROR.
+    • Function parameters typed as any → Use unknown + type guards or generics.
+    • Return types as any → Explicitly type the return.
+    • Type assertions to any (as any) → Use proper type narrowing.
+  \`any\` disables ALL type checking and is a security/reliability risk.
+
+- PROP DRILLING (> 3 LEVELS): Flag any prop passed through more than 3 component levels without consumption.
+    • Suggests: React Context, Zustand, Jotai, or component composition (children pattern).
+  Severity: WARNING at 3 levels, ERROR at 4+.
+
+- MISSING PROP TYPES: Flag components without explicit TypeScript interface/type for props.
+    • MUST define: interface ComponentProps { ... } or type ComponentProps = { ... }
+    • Destructure props with typed interface: ({ prop1, prop2 }: ComponentProps)
+
+- OPTIONAL PROPS WITHOUT DEFAULTS: Flag optional props accessed without nullish coalescing or defaults.
+    • props.value.toString() where value is optional → ERROR (potential runtime crash).
+    • MUST use: props.value ?? defaultValue or provide defaultProps.
+
+- EXCESSIVE PROPS: Flag components accepting > 7 props. Suggests grouping into config objects or decomposing.
+
+────────────────────────────────────────────────────────────────────────────
+ R7 — SECURITY (SEVERITY: ERROR — IMMEDIATE FAIL)
+────────────────────────────────────────────────────────────────────────────
+- dangerouslySetInnerHTML: Flag EVERY usage as ERROR.
+    • If truly necessary, MUST sanitise with DOMPurify or equivalent BEFORE injection.
+    • Unsanitised dangerouslySetInnerHTML = XSS vulnerability → CRITICAL ERROR.
+
+- UNPROTECTED href: Flag <a> tags with target="_blank" missing rel="noopener noreferrer".
+    • <a href={url} target="_blank"> → ERROR.
+    • MUST be: <a href={url} target="_blank" rel="noopener noreferrer">
+
+- USER INPUT IN URLS: Flag any dynamic user input used in href, src, or action without validation.
+    • href={\`/path/\${userInput}\`} → Potential open redirect. Validate against allowlist.
+
+- eval() / Function() CONSTRUCTOR: Flag as CRITICAL ERROR. Zero tolerance.
+
+- SENSITIVE DATA IN CLIENT STATE: Flag API keys, tokens, passwords stored in React state, localStorage, or sessionStorage without encryption.
+
+- UNSAFE SERIALISATION: Flag JSON.parse(untrustedInput) without try/catch and schema validation.
+
+────────────────────────────────────────────────────────────────────────────
+ R8 — IMMUTABILITY & REFERENCES (SEVERITY: WARNING)
+────────────────────────────────────────────────────────────────────────────
+- CONST vs LET: Flag every \`let\` that is never reassigned → MUST be \`const\`.
+- UNNECESSARY SPREAD COPIES: Flag {...obj} or [...arr] when the reference is never mutated → wasteful allocation.
+- DEEP CLONES: Flag structuredClone() or JSON.parse(JSON.stringify()) when a shallow copy or reference suffices.
+- Object.freeze / Readonly<T>: Suggest for config objects, constants, and lookup tables.
+- "as const": Suggest for literal type inference on static configuration arrays/objects.
+
+────────────────────────────────────────────────────────────────────────────
+ R9 — DATA STRUCTURES (SEVERITY: WARNING)
+────────────────────────────────────────────────────────────────────────────
+- Map/Set vs PLAIN OBJECTS: Flag plain objects used as dynamic key-value stores → Use Map for O(1) lookup with non-string keys.
+- ARRAY.INCLUDES vs SET.HAS: Flag array.includes() in hot paths with > 10 items → Convert to Set for O(1) lookup.
+- TypedArrays: Flag number[] for large numeric buffers → Use Float64Array, Int32Array, etc.
+- WeakMap/WeakRef: Suggest for caching DOM nodes or objects that should be garbage-collectible.
+
+────────────────────────────────────────────────────────────────────────────
+ R10 — HOOKS DISCIPLINE (SEVERITY: ERROR)
+────────────────────────────────────────────────────────────────────────────
+- RULES OF HOOKS: Flag hooks called conditionally, inside loops, or in nested functions → ERROR.
+- DEPENDENCY ARRAY COMPLETENESS: Flag missing dependencies in useEffect/useMemo/useCallback → leads to stale closures and bugs.
+- OVER-SPECIFIED DEPENDENCIES: Flag dependencies that change on every render (inline objects/functions) → defeats memoisation.
+- useEffect AS STATE SYNC: Flag useEffect used to derive state from other state → Use useMemo or compute directly in render.
+    • Anti-pattern: useEffect(() => { setDerived(compute(state)) }, [state]) → MUST be: const derived = useMemo(() => compute(state), [state]);
+- EXCESSIVE useStates: Flag components with > 5 independent useState calls → Suggest useReducer.
+
+────────────────────────────────────────────────────────────────────────────
+ R11 — V8 ENGINE OPTIMISATIONS (SEVERITY: INFO → WARNING)
+────────────────────────────────────────────────────────────────────────────
+- HIDDEN CLASS DEOPTIMISATION: Flag \`delete\` operator on objects → deoptimises V8 hidden classes. Use undefined assignment or Map.
+- MONOMORPHIC CALLS: Flag functions that receive different object shapes in hot paths → V8 inline cache thrashing.
+- == vs ===: Flag every == (loose equality) → MUST use === (strict equality). No exceptions.
+- TEMPLATE LITERALS: Flag string concatenation with + in hot loops → Use template literals or array.join().
 `.trim();
 
 // ─── 5. LANGUAGE ROUTER ─────────────────────────────────────────────────────
@@ -279,19 +467,35 @@ Apply these thresholds strictly. Do NOT downgrade severity.
 │──────────│───────────────────────────────────────────────────────────────────────│
 │ error    │ • Complexity ≥ O(n²) where O(n log n) or better is achievable        │
 │          │ • Memory leak / use-after-free / null deref / buffer overflow          │
-│          │ • Security vulnerability (injection, hardcoded secret)                │
+│          │ • Security vulnerability (injection, hardcoded secret, XSS)           │
 │          │ • Pass-by-value of structure > 1KB in a hot path                      │
 │          │ • Unbounded allocation inside a loop                                   │
+│          │ • [REACT] Inline object/function in JSX prop (re-render trigger)       │
+│          │ • [REACT] Direct state mutation (array.push, obj.key = val)            │
+│          │ • [REACT] Missing useEffect cleanup (addEventListener, setInterval)    │
+│          │ • [REACT] dangerouslySetInnerHTML without DOMPurify sanitisation       │
+│          │ • [REACT] unprotected <a target="_blank"> without rel="noopener"      │
+│          │ • [TS] Any use of the \`any\` type                                     │
+│          │ • [REACT] await inside loops without Promise.all parallelisation      │
+│          │ • [REACT] Hooks called conditionally or inside loops                   │
 │──────────│───────────────────────────────────────────────────────────────────────│
 │ warning  │ • Complexity one class above optimal (e.g., O(n log n) where O(n) ok)│
 │          │ • Unnecessary copy of medium structure (64B–1KB) in moderate path      │
 │          │ • Missing error handling on I/O operations                            │
 │          │ • Anti-pattern or non-idiomatic construct                              │
 │          │ • cyclomatic complexity > 10                                           │
+│          │ • [REACT] O(n) computation in render body without useMemo             │
+│          │ • [REACT] Prop drilling > 3 levels                                    │
+│          │ • [REACT] Missing useCallback for props passed to memoised children   │
+│          │ • [REACT] useEffect used to sync derived state (should be useMemo)    │
+│          │ • [REACT] Sequential awaits that could be Promise.all                 │
+│          │ • [REACT] Component with > 5 useState calls (should use useReducer)   │
 │──────────│───────────────────────────────────────────────────────────────────────│
 │ info     │ • Stylistic improvement (naming, magic numbers, comments)             │
 │          │ • Minor redundancy (unused import, dead variable)                      │
 │          │ • Modernisation suggestion (newer API available)                       │
+│          │ • [REACT] Missing React.memo on pure child component                  │
+│          │ • [TS] let used where const would suffice                             │
 └──────────┴───────────────────────────────────────────────────────────────────────┘
 `.trim();
 
@@ -334,6 +538,18 @@ You will be evaluated on completeness. Specifically:
 - If you miss a quadratic loop that could be linearised → FAILURE.
 - If you provide vague suggestions ("consider optimising") instead of concrete code → FAILURE.
 - If you invent issues not present in the code → FAILURE.
+
+[REACT / TYPESCRIPT SPECIFIC — ZERO TOLERANCE]
+- If you miss an inline object/function in JSX props (style={{ }}, onClick={() => {}}) → FAILURE.
+- If you miss a direct state mutation (array.push, obj.key = val on state) → FAILURE.
+- If you miss a useEffect without cleanup (addEventListener, setInterval, WebSocket) → FAILURE.
+- If you miss sequential awaits that could be Promise.all → FAILURE.
+- If you miss heavy computation chains (.filter().map().sort()) inside render body → FAILURE.
+- If you miss dangerouslySetInnerHTML or unprotected target="_blank" → FAILURE.
+- If you miss ANY usage of the \`any\` type → FAILURE.
+- If you miss prop drilling > 3 levels deep → FAILURE.
+- If you miss stale closure bugs in useEffect dependency arrays → FAILURE.
+- If you miss async state updates after unmount without cancellation → FAILURE.
 `.trim();
 }
 

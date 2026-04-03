@@ -5,7 +5,7 @@ export const analysisStatusEnum = pgEnum('analysis_status', [
     'pending', 'processing', 'complete', 'failed', 'cancelled',
 ]);
 export const languageEnum = pgEnum('language', [
-    'typescript', 'javascript', 'python', 'go', 'rust', 'java', 'cpp', 'csharp', 'ruby', 'php',
+    'typescript', 'javascript', 'python', 'go', 'rust', 'java', 'cpp', 'csharp', 'ruby', 'php', 'plaintext',
 ]);
 export const analyses = pgTable('analyses', {
     id: uuid('id').defaultRandom().primaryKey(),
